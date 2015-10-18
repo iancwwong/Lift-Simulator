@@ -183,33 +183,20 @@ RESET:
 	do_lcd_command 0, 0b00001100 ; Disply on, Cursor off, blink off
 	
 	do_lcd_command 0, 0b10000000	; set cursor to 1st position on top line
-	;do_lcd_data 0, 'C'
-	;do_lcd_data 0, 'U'
-	;do_lcd_data 0, 'R'
-	;do_lcd_data 0, 'R'
-	;do_lcd_data 0, 'E'
-	;do_lcd_data 0, 'N'
-	;do_lcd_data 0, 'T'
-	;do_lcd_data 0, ' '
-	;do_lcd_data 0, 'F'
-	;do_lcd_data 0, 'L'
-	;do_lcd_data 0, 'O'
-	;do_lcd_data 0, 'O'
-	;do_lcd_data 0, 'R'
-	;do_lcd_data 0, ':'
-
-	do_lcd_data 0, '0'
-	do_lcd_data 0, '1'
-	do_lcd_data 0, '2'
-	do_lcd_data 0, '3'
-	do_lcd_data 0, '4'
-	do_lcd_data 0, '5'
-	do_lcd_data 0, '6'
-	do_lcd_data 0, '7'
-	do_lcd_data 0, '8'
-	do_lcd_data 0, '9'
-
-	;do_lcd_command 0, 0b10101000 	; set cursor to 1st position on bottom line
+	do_lcd_data 0, 'C'
+	do_lcd_data 0, 'U'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, 'E'
+	do_lcd_data 0, 'N'
+	do_lcd_data 0, 'T'
+	do_lcd_data 0, ' '
+	do_lcd_data 0, 'F'
+	do_lcd_data 0, 'L'
+	do_lcd_data 0, 'O'
+	do_lcd_data 0, 'O'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, ':'
 
 	; Clear all variables
 	clr lift_direction
@@ -390,7 +377,7 @@ TIMER2_OVERFLOW:
 			DISPLAY_LED_OUTPUT:
 
 			; Display the direction
-			;out PORTC, temp1
+			out PORTC, temp1
 			sts LED_lift_direction_output, temp1
 
 			; Display the door state
@@ -417,41 +404,13 @@ TIMER2_OVERFLOW:
 		reti	
 
 MAIN:
-	; If refresh 
-	; Loop through the floor_array, inspecting for which ones are set
-	; Initiate X pointer
-	ldi XH, high(floor_array)
-	ldi XL, low(floor_array)
+	; DEBUGGING - Initilisation of variables to test functionality
+	ldi current_floor, 6
+	ldi lift_direction, 1
+	ldi door_state, door_opening
 
-	; Initiate loop counter
-	ldi temp2, 0
-
-	; Prepare cursor position
-	do_lcd_command 0, 0b10101000 	; set cursor to 1st position on bottom line
-
-	INSPECT_FLOOR_ARRAY_LOOP:
-		cpi temp2, 10
-		breq END_INSPECT_FLOOR_ARRAY_LOOP
-
-		; Check whether current floor in array is set
-		ld temp1, X+
-		cpi temp1, 0
-			; If set
-			brne CASE_FLOOR_IS_SET
-			
-			; Not set: print an '0' at the current cursor
-			do_lcd_data 0, '0'
-			rjmp REPEAT_INSPECT_FLOOR_ARRAY_LOOP
-
-		CASE_FLOOR_IS_SET:
-			; Print an 'X' at the current cursor
-			do_lcd_data 0, 'X'
-
-		REPEAT_INSPECT_FLOOR_ARRAY_LOOP:
-		inc temp2
-		rjmp INSPECT_FLOOR_ARRAY_LOOP
-
-	END_INSPECT_FLOOR_ARRAY_LOOP:
+	; Display current floor on LCD
+	lcd_display_current_floor
 
 	; Poll keypresses
 	POLL_KEYPRESSES:
