@@ -22,6 +22,10 @@
 .equ door_opened = 2
 .equ door_closing = 3
 
+; Time keeping values
+.equ half_second_overflows = 3906
+.equ eighth_second_overflows = 976
+
 ; Used for the keypad
 .equ PORTLDIR = 0xF0			; PD7-4: output, PD3-0: input
 .equ INITCOLMASK = 0xEF			; Scan from leftmost column
@@ -94,12 +98,15 @@
 
 ; DATA SEGMENT ####################################################
 .dseg
+	
+	floor_array: .byte 10					; Array of flags to keep track of which floors are requested to be visited
+	floor_changed: .byte 1					; Flag used to indicate the floor level has changed
 
-	eighthTimeCounter: .byte 2				; Used to calculate whether 1/8th second has passed
-	halfTimeCounter: .byte 2				; Used to calculate whether 1/2 second has passed
 	LED_lift_direction_output: .byte 1		; LED pattern for the lift direction component
 	LED_door_state_output: .byte 1			; LED pattern for the door state component
-	floor_changed: .byte 1					; Flag used to indicate the floor level has changed
+	
+	eighthTimeCounter: .byte 2				; Used to calculate whether 1/8th second has passed
+	halfTimeCounter: .byte 2				; Used to calculate whether 1/2 second has passed
 
 	; Used for recording keypad presses reliably
 	oldCol: .byte 1
@@ -108,15 +115,16 @@
 ; CODE SEGMENT ####################################################
 .cseg
 
-jmp RESET
+.org 0
+	rjmp RESET
 
 ; Timer0 overflow interrupt procedure
 .org OVF0addr
-	jmp TIMER0_OVERFLOW
+	rjmp TIMER0_OVERFLOW
 
 ; Timer2 overflow interrupt procedure
 .org OVF2addr
-	jmp TIMER2_OVERFLOW
+	rjmp TIMER2_OVERFLOW
 
 RESET:
 
@@ -204,10 +212,10 @@ RESET:
 	;do_lcd_command 0, 0b10101000 	; set cursor to 1st position on bottom line
 
 	; Clear all variables
-	clr temp1
-	clr temp2
 	clr lift_direction
 	clr door_state
+	clr col
+	clr row
 
 	; Clear all data in dseg
 	clear eighthTimeCounter
@@ -215,6 +223,18 @@ RESET:
 	sts LED_lift_direction_output, temp1
 	sts LED_door_state_output, temp1
 	sts floor_changed, temp1
+
+	; Clear the floor_array
+	sts floor_array, temp1
+	sts floor_array+1, temp1
+	sts floor_array+2, temp1
+	sts floor_array+3, temp1
+	sts floor_array+4, temp1
+	sts floor_array+5, temp1
+	sts floor_array+6, temp1
+	sts floor_array+7, temp1
+	sts floor_array+8, temp1
+	sts floor_array+9, temp1
 
 	; Initialise both oldCol and oldRow to be some number greater than 3
 	ldi temp1, 9
@@ -224,6 +244,7 @@ RESET:
 	sei
 	rjmp MAIN
 
+; Used to simulate the lift by setting flags
 TIMER0_OVERFLOW:
 	; Prologue - save all registers
 	TIMER0_PROLOGUE:
@@ -239,15 +260,19 @@ TIMER0_OVERFLOW:
 		adiw temp2:temp1, 1
 
 		;if TimeCounter value is 3906, then half a second has occurred
-		cpi temp1, low(3906)
-		ldi r26, high(3906)
+		cpi temp1, low(half_second_overflows)
+		ldi r26, high(half_second_overflows)
 		cpc temp2, r26
-		brne TIMER0_HALF_SECOND_NOT_ELAPSED
+		brne TIMER0_HALF_SECOND_NOT_ELAPSED_label
+		rjmp TIMER0_HALF_SECOND_ELAPSED
 
-		; if 1 second has occurred
+			TIMER0_HALF_SECOND_NOT_ELAPSED_LABEL:
+			rjmp TIMER0_HALF_SECOND_NOT_ELAPSED
+
+		; if half second has occurred
 		TIMER0_HALF_SECOND_ELAPSED:
 
-			; Debugging: 
+			; do something
 
 			TIMER0_END_HALF_SECOND_ELAPSED:
 			clear halfTimeCounter
@@ -284,8 +309,8 @@ TIMER2_OVERFLOW:
 		adiw temp2:temp1, 1
 
 		;if TimeCounter value is 3906, then 1/8th a second has occurred
-		cpi temp1, low(976)
-		ldi r26, high(976)
+		cpi temp1, low(eighth_second_overflows)
+		ldi r26, high(eighth_second_overflows)
 		cpc temp2, r26
 		brne TIMER2_8th_SECOND_NOT_ELAPSED_label
 		rjmp TIMER2_8th_SECOND_ELAPSED
@@ -392,7 +417,45 @@ TIMER2_OVERFLOW:
 		reti	
 
 MAIN:
+	; If refresh 
+	; Loop through the floor_array, inspecting for which ones are set
+	; Initiate X pointer
+	ldi XH, high(floor_array)
+	ldi XL, low(floor_array)
+
+	; Initiate loop counter
+	ldi temp2, 0
+
+	; Prepare cursor position
+	do_lcd_command 0, 0b10101000 	; set cursor to 1st position on bottom line
+
+	INSPECT_FLOOR_ARRAY_LOOP:
+		cpi temp2, 10
+		breq END_INSPECT_FLOOR_ARRAY_LOOP
+
+		; Check whether current floor in array is set
+		ld temp1, X+
+		cpi temp1, 0
+			; If set
+			brne CASE_FLOOR_IS_SET
+			
+			; Not set: print an '0' at the current cursor
+			do_lcd_data 0, '0'
+			rjmp REPEAT_INSPECT_FLOOR_ARRAY_LOOP
+
+		CASE_FLOOR_IS_SET:
+			; Print an 'X' at the current cursor
+			do_lcd_data 0, 'X'
+
+		REPEAT_INSPECT_FLOOR_ARRAY_LOOP:
+		inc temp2
+		rjmp INSPECT_FLOOR_ARRAY_LOOP
+
+	END_INSPECT_FLOOR_ARRAY_LOOP:
+
 	; Poll keypresses
+	POLL_KEYPRESSES:
+	
 	; Prepare column start and end points
 	ldi colmask, INITCOLMASK
 	clr col
@@ -408,7 +471,7 @@ MAIN:
 		ldi temp1, 9
 		sts oldCol, temp1
 		sts oldRow, temp1
-		rjmp MAIN
+		rjmp END_POLL_KEYPRESSES
 
 		SCAN_COLUMN:
 		; else scan the column
@@ -468,7 +531,7 @@ MAIN:
 				cp temp1, row
 
 					;if the same, then same key has been pressed - go back to main
-					breq MAIN
+					breq END_POLL_KEYPRESSES
 
 					; else key press is different 
 					; Record new col and row combination, and proceed to execute process
@@ -487,6 +550,9 @@ MAIN:
 			lsl colmask				; TO move to next column
 			inc colmask				; Ensure pull up resistors are enabled
 			rjmp COLUMN_LOOP
+	
+	END_POLL_KEYPRESSES:
+	rjmp MAIN
 	
 HALT: rjmp halt
 
@@ -518,10 +584,20 @@ CONVERT:
 		inc temp1
 
 		; Check the corresponding floor in the floor_array
-
-
-		; Debugging: display through LED
-		out PORTC, temp1
+		ldi XH, high(floor_array)
+		ldi XL, low(floor_array)
+		add XL, temp1
+		ldi temp1, 0
+		adc XH, temp1
+		ld temp1, X
+		cpi temp1, 0
+			brne CLEAR_FLOORN_IN_ARRAY
+				ldi temp1, 1
+				st X, temp1
+				rjmp CONVERT_END
+			CLEAR_FLOORN_IN_ARRAY:
+				ldi temp1, 0
+				st X, temp1	
 
 		rjmp CONVERT_END
 
@@ -549,12 +625,20 @@ CONVERT:
 		STAR:
 			rjmp CONVERT_END
 
-		; Floor pressed is 0
+		; Floor pressed is 0 - set in floor_array
 		ZERO:
-				
+			lds temp1, floor_array
+			cpi temp1, 0
+			brne CLEAR_FLOOR0_IN_ARRAY
+				ldi temp1, 1
+				sts floor_array, temp1
+				rjmp CONVERT_END
+			CLEAR_FLOOR0_IN_ARRAY:
+				ldi temp1, 0
+				sts floor_array, temp1			
 		
 	CONVERT_END:
-		rjmp MAIN
+		rjmp END_POLL_KEYPRESSES
 
 ; COMMANDS USED FOR THE LCD	##########################################
 ; Some constants
