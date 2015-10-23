@@ -26,7 +26,13 @@
 .equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
 
-; Used for the keypad
+; Used for controlling the motor speed
+.equ motor_speed_low = OCR3BL	;using Timer 3, fast PWM mode
+.equ motor_speed_high = OCR3BH
+.equ full_motor_speed = 0xFF
+.equ no_motor_speed = 0
+
+; Used for scanning the keypad
 .equ PORTLDIR = 0xF0			; PD7-4: output, PD3-0: input
 .equ INITCOLMASK = 0xEF			; Scan from leftmost column
 .equ INITROWMASK = 0x01			; Scan from topmost row
@@ -126,6 +132,11 @@
 .org OVF2addr
 	rjmp TIMER2_OVERFLOW
 
+; Timer 5 overflow interrupt procedure
+.org OVF5addr
+	rjmp TIMER5_OVERFLOW
+
+; Hard reset
 RESET:
 
 	; Initialise stack
@@ -134,43 +145,70 @@ RESET:
 	ldi temp1, low(RAMEND)
 	out SPL, temp1
 
-	; Prepare timer0
-	; Prepare the Timer Counter Control Register (both A and B)
-	; NOTE: A determines mode of operation,
-	; 		B determines the prescaling of the timer
-	; TIMSK is the timer mask
+	; Prepare Timer 0
 	ldi temp1, 0b00000000			; Operation mode: normal
-	sts TCCR0A, temp1
-	sts TCCR2A, temp1
+	sts TCCR0A, temp1	
 	ldi temp1, 0b00000010			; Prescaling: 00000010
-	sts TCCR0B, temp1
-	sts TCCR2B, temp1
-	ldi temp1, 1<<TOIE0				; Timer interrupt mask for timer0 and timer2
+	sts TCCR0B, temp1	
+	ldi temp1, 1<<TOIE0				; Timer interrupt mask
 	sts TIMSK0, temp1
-	ldi temp1, 1<<TOIE2	
+	
+
+	; Prepare Timer 2 and the LED's
+	ldi temp1, 0b00000000			; Operation mode: normal
+	sts TCCR2A, temp1
+	ldi temp1, 0b00000010			; Prescaling: CLK/8
+	sts TCCR2B, temp1
+	ldi temp1, 1<<TOIE2				; Timer mask
 	sts TIMSK2, temp1
 
-	; set port K to be output (the top 2 strobe LED's)
+	; set port B (strobe LED's) and port C (8-bit LED) to be output
 	ser temp1
 	out DDRB, temp1
-
-	; set PORT C to be LED output (the main 8-bit LED)
 	out DDRC, temp1
+
+	; Prepare motor related components
+	; Set PE2 to be output (Port E will control the motor)
+	ser temp1
+	out DDRE, temp1
+
+	; Initialise motor speed (ie Setting the value of PWM for OC3B to 0)
+	ldi temp1, no_motor_speed
+	sts motor_speed_low, temp1
+	sts motor_speed_high, temp1
+
+	; Configure Timer 3
+	ldi temp1, (1 << WGM30) | (1 << WGM31)	; Operation mode: Fast PWM
+	ori temp1, (1 << COM3B1)				; 				  cleared on compare match
+	sts TCCR3A, temp1
+	ldi temp1, (1 << CS30)			; Prescaling: none
+	sts TCCR3B, temp1
+
+	; Prepare Timer 5
+	ldi temp1, 0b00000000			; Operation mode: normal
+	sts TCCR5A, temp1
+	ldi temp1, 0b00000010			; Prescaling: CLK/8
+	sts TCCR5B, temp1
+	ldi temp1, 1<<TOIE5				; Timer mask
+	sts TIMSK5, temp1
 
 	; Prepare the keypad ports
 	; - Prepare Port L - output through PD7-4, read through PD3-0
 	ldi temp1, PORTLDIR
 	sts DDRL, temp1
 
-	; Prepare the F and A ports for LCD Data and LCD Control
+	; Prepare the LCD
+	; Configure ports F and A - F and A ports are for LCD Data and LCD control respectively
 	ser temp1
 	out DDRF, temp1
 	out DDRA, temp1
 	clr temp1
 	out PORTF, temp1
-	out PORTA, temp1
+	out PORTA, temp1	
+	ldi temp1, 0b00001000
+	out PORTE, temp1 			 ;Turn on backlight (through pin PE5 on Port E)
 
-	; Prepare the LCD
+	; Reset the LCD display
 	do_lcd_command 0, 0b00111000 ; 2x5x7
 	rcall sleep_5ms
 	do_lcd_command 0, 0b00111000 ; 2x5x7
@@ -182,6 +220,7 @@ RESET:
 	do_lcd_command 0, 0b00000110 ; increment, no display shift
 	do_lcd_command 0, 0b00001100 ; Disply on, Cursor off, blink off
 	
+	; Display initial message
 	do_lcd_command 0, 0b10000000	; set cursor to 1st position on top line
 	do_lcd_data 0, 'C'
 	do_lcd_data 0, 'U'
@@ -231,7 +270,7 @@ RESET:
 	sei
 	rjmp MAIN
 
-; Used to simulate the lift by setting flags
+; Keeping track of the lift movement
 TIMER0_OVERFLOW:
 	; Prologue - save all registers
 	TIMER0_PROLOGUE:
@@ -279,7 +318,7 @@ TIMER0_OVERFLOW:
 		pop temp1
 		reti		
 
-; Timer2 overflow interrupt procedure
+; Describe the door state and lift direction using the LED's
 TIMER2_OVERFLOW:
 	; Prologue - save all registers
 	TIMER2_PROLOGUE:
@@ -401,8 +440,45 @@ TIMER2_OVERFLOW:
 		out SREG, temp1
 		pop temp2
 		pop temp1
-		reti	
+		reti
 
+; Turns the motor on/off depending on the door_state variable
+TIMER5_OVERFLOW:
+
+	; Prologue - save conflict registers
+	TIMER5_PROLOGUE: 
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	; Function body
+	; Check whether the lift door is opening or closing
+	; If so, set motor to full speed
+	cpi door_state, door_closing
+	breq SET_MOTOR
+	cpi door_state, door_opening
+	breq SET_MOTOR
+
+	; else turn off the motor
+	ldi temp1, no_motor_speed
+	sts motor_speed_low, temp1
+	sts motor_speed_high, temp1
+	rjmp TIMER5_EPILOGUE
+
+	SET_MOTOR:
+		ldi temp1, full_motor_speed
+		sts motor_speed_low, temp1
+		sts motor_speed_high, temp1
+
+	; Epilogue - restore all registers
+	TIMER5_EPILOGUE:
+	pop temp1
+	out SREG, temp1
+	pop temp1
+	reti		
+	
+
+; Main procedure
 MAIN:
 	; DEBUGGING - Initilisation of variables to test functionality
 	ldi current_floor, 6
@@ -554,7 +630,7 @@ CONVERT:
 				ldi temp1, 1
 				st X, temp1
 				rjmp CONVERT_END
-			CLEAR_FLOORN_IN_ARRAY:
+			CLEAR_FLOORN_IN_ARRAY:				;Remove this: clears the specified floor when the key is pressed again
 				ldi temp1, 0
 				st X, temp1	
 
