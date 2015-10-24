@@ -633,7 +633,32 @@ MAIN:
 	lcd_display_current_floor
 
 	; Poll keypresses
-	POLL_KEYPRESSES:
+	rcall poll_keypresses
+
+	; Start main again
+	rjmp MAIN
+
+; DEBUGGING	 - check particular outputs using LED's
+HALT: 
+	lds temp1, stop_at_floor
+	out PORTC, temp1
+
+	; Disable all interrupts
+	in temp1, SREG
+	andi temp1, 0b10000000
+	out SREG, temp1
+
+	rjmp halt
+
+; GENERAL FUNCTIONS ######################################################
+
+poll_keypresses:
+	; save conflict registers
+	push temp1
+	push temp2
+
+	; poll keypresses
+	START_POLL_KEYPRESSES:
 	
 	; Prepare column start and end points
 	ldi colmask, INITCOLMASK
@@ -731,23 +756,13 @@ MAIN:
 			rjmp COLUMN_LOOP
 	
 	END_POLL_KEYPRESSES:
-	rjmp MAIN
-	
-HALT: 
-	lds temp1, stop_at_floor
-	out PORTC, temp1
+	; restore conflict registers, and return
+	pop temp2
+	pop temp1
+	ret
 
-	; Disable all interrupts
-	in temp1, SREG
-	andi temp1, 0b10000000
-	out SREG, temp1
-
-	rjmp halt
-
-; CONVERSION METHODS FOR KEYPRESS ####################################
-
-; Detect what kind of key was pressed,
-; and store the entered value into temp1
+; Detect what kind of key was pressed
+; and carry out appropriate actions
 CONVERT:
 	cpi col, 3
 
@@ -783,7 +798,7 @@ CONVERT:
 				ldi temp1, true
 				st X, temp1
 				rjmp CONVERT_END
-			CLEAR_FLOORN_IN_ARRAY:				;Remove this: clears the specified floor when the key is pressed again
+			CLEAR_FLOORN_IN_ARRAY:				; DEBUGGING: clears the specified floor when the key is pressed again
 				ldi temp1, false
 				st X, temp1	
 
@@ -828,7 +843,7 @@ CONVERT:
 	CONVERT_END:
 		rjmp END_POLL_KEYPRESSES
 
-; COMMANDS USED FOR THE LCD	##########################################
+; FUNCTIONS USED FOR THE LCD	##########################################
 ; Some constants
 .equ LCD_RS = 7
 .equ LCD_E = 6
