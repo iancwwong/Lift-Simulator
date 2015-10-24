@@ -16,15 +16,28 @@
 
 ; CONSTANTS #######################################################
 
+; Describe lift direction
+.equ dir_up = 1
+.equ dir_stop = 0
+.equ dir_down = -1
+
 ; Describe door state
 .equ door_closed = 0
 .equ door_opening = 1
 .equ door_opened = 2
 .equ door_closing = 3
 
+; Durations (in seconds) used for the "stop at floor" procedure
+.equ stop_at_floor_progress_start = 0
+.equ stop_at_floor_opening_duration = 1
+.equ stop_at_floor_closing_duration = 1
+.equ stop_at_floor_opened_duration = 3
+.equ stop_at_floor_total_duration = 5			; opening_duration + opened_duration + closing_duration
+
 ; Time keeping values
 .equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
+.equ one_second_overflows = 30				;NOTE: SPECIFICALLY for a 16-bit timer
 
 ; Used for controlling the motor speed
 .equ motor_speed_low = OCR3BL	;using Timer 3, fast PWM mode
@@ -36,7 +49,11 @@
 .equ PORTLDIR = 0xF0			; PD7-4: output, PD3-0: input
 .equ INITCOLMASK = 0xEF			; Scan from leftmost column
 .equ INITROWMASK = 0x01			; Scan from topmost row
-.equ OUTPUTMASK = 0x0F		
+.equ OUTPUTMASK = 0x0F
+
+; Boolean values
+.equ true = 1
+.equ false = 0		
 
 ; MACROS ##########################################################
 
@@ -118,19 +135,30 @@
 	oldCol: .byte 1
 	oldRow: .byte 1
 
+	; Used for a "Stop at floor" request
+	stop_at_floor: .byte 1			; flag used to indicate a "stop at current floor" request
+	stop_at_floor_progress: .byte 1	; Progress value of "stop at floor" procedure.
+
+	; Used to count number of timer4 overflows
+	timer4_TimeCounter: .byte 1	
+
 ; CODE SEGMENT ####################################################
 .cseg
 
 .org 0
 	rjmp RESET
 
-; Timer0 overflow interrupt procedure
+; Timer 0 overflow interrupt procedure
 .org OVF0addr
 	rjmp TIMER0_OVERFLOW
 
-; Timer2 overflow interrupt procedure
+; Timer 2 overflow interrupt procedure
 .org OVF2addr
 	rjmp TIMER2_OVERFLOW
+
+; Timer 4 overflow interrupt procedure
+.org OVF4addr
+	rjmp TIMER4_OVERFLOW
 
 ; Timer 5 overflow interrupt procedure
 .org OVF5addr
@@ -167,6 +195,13 @@ RESET:
 	out DDRB, temp1
 	out DDRC, temp1
 
+	; Prepare Timer 3 and the motor
+	ldi temp1, (1 << WGM30) | (1 << WGM31)	; Operation mode: Fast PWM
+	ori temp1, (1 << COM3B1)				; 				  cleared on compare match
+	sts TCCR3A, temp1
+	ldi temp1, (1 << CS30)			; Prescaling: none
+	sts TCCR3B, temp1
+
 	; Prepare motor related components
 	; Set PE2 to be output (Port E will control the motor)
 	ser temp1
@@ -177,19 +212,20 @@ RESET:
 	sts motor_speed_low, temp1
 	sts motor_speed_high, temp1
 
-	; Configure Timer 3
-	ldi temp1, (1 << WGM30) | (1 << WGM31)	; Operation mode: Fast PWM
-	ori temp1, (1 << COM3B1)				; 				  cleared on compare match
-	sts TCCR3A, temp1
-	ldi temp1, (1 << CS30)			; Prescaling: none
-	sts TCCR3B, temp1
+	; Prepare timer4
+	ldi temp1, 0b00000000			; Operation mode: normal
+	sts TCCR4A, temp1
+	ldi temp1, (1 << CS41)			; Prescaling: CLK/8
+	sts TCCR4B, temp1
+	ldi temp1, 1<<TOIE4				; Timer mask for overflow interrupt
+	sts TIMSK4, temp1
 
 	; Prepare Timer 5
 	ldi temp1, 0b00000000			; Operation mode: normal
 	sts TCCR5A, temp1
 	ldi temp1, 0b00000010			; Prescaling: CLK/8
 	sts TCCR5B, temp1
-	ldi temp1, 1<<TOIE5				; Timer mask
+	ldi temp1, 1<<TOIE5				; Timer mask for overflow interrupt
 	sts TIMSK5, temp1
 
 	; Prepare the keypad ports
@@ -246,9 +282,12 @@ RESET:
 	; Clear all data in dseg
 	clear eighthTimeCounter
 	clear halfTimeCounter
+	clr temp1
 	sts LED_lift_direction_output, temp1
 	sts LED_door_state_output, temp1
 	sts floor_changed, temp1
+	sts stop_at_floor, temp1
+	sts stop_at_floor_progress, temp1
 
 	; Clear the floor_array
 	sts floor_array, temp1
@@ -266,6 +305,13 @@ RESET:
 	ldi temp1, 9
 	sts oldCol, temp1
 	sts oldRow, temp1
+
+	; DEBUGGING - Initilisation of variables to test functionality
+	ldi current_floor, 6
+	ldi lift_direction, dir_stop
+	ldi door_state, door_closed
+	ldi temp1, true
+	sts stop_at_floor, temp1
 
 	sei
 	rjmp MAIN
@@ -442,6 +488,109 @@ TIMER2_OVERFLOW:
 		pop temp1
 		reti
 
+; Control the "stop at floor" procedure
+TIMER4_OVERFLOW:
+	; Prologue - save all registers
+	TIMER4_PROLOGUE:
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	; Interrupt body
+	; Check if there is a "stop at floor" request
+	lds temp1, stop_at_floor
+	cpi temp1, false
+
+	;Flag is set
+	brne TIMER4_TRACK_PROGRESS
+
+	;Else exit interrupt procedure
+	rjmp TIMER4_EPILOGUE
+
+	; Start tracking the progress and changing the door state.
+	; NOTE: progress can go from 0-5 (progress essentially represents number of seconds elapsed
+	; 		while the stop_at_floor flag is set):
+	; for 0-1 seconds, door is opening
+	; for 1-4 seconds, door is opened
+	; for 4-5 seconds, door is closing
+	; for 5 seconds onwards, door is closed
+	TIMER4_TRACK_PROGRESS:
+
+		; Load TimeCounter, and increment by 1
+		lds temp1, timer4_TimeCounter
+		inc temp1
+
+		;if TimeCounter value is 30, then one second has occurred (16-bit timer overflows)
+		cpi temp1, one_second_overflows
+		breq TIMER4_ONE_SECOND_ELAPSED
+
+		; Else one second has not been elapsed
+		rjmp TIMER4_ONE_SECOND_NOT_ELAPSED
+
+		; if one second has occurred
+		TIMER4_ONE_SECOND_ELAPSED:
+			; Load the progress
+			lds temp1, stop_at_floor_progress
+			
+			; Check the progress, and carry out the appropriate procedure
+			cpi temp1, stop_at_floor_progress_start
+			breq DOOR_IS_OPENING_lol
+			cpi temp1, stop_at_floor_total_duration
+			breq DOOR_IS_CLOSED
+			cpi temp1, (stop_at_floor_total_duration - stop_at_floor_closing_duration)
+			breq DOOR_IS_CLOSING
+
+			; At this point, the door must be opened
+			DOOR_IS_OPENED:
+				ldi door_state, door_opened
+				rjmp TIMER4_END_ONE_SECOND_ELAPSED
+
+			DOOR_IS_OPENING_lol:
+				ldi door_state, door_opening
+				rjmp TIMER4_END_ONE_SECOND_ELAPSED
+
+			DOOR_IS_CLOSING:
+				ldi door_state, door_closing
+				rjmp TIMER4_END_ONE_SECOND_ELAPSED
+
+			DOOR_IS_CLOSED:	
+				; Set the progress to be -1 (in prep for reset of progress)
+				ldi temp1, -1
+				sts stop_at_floor_progress, temp1
+
+				;Clear the stop_at_floor flag
+				ldi temp1, false
+				sts stop_at_floor, temp1
+
+				;Close the door
+				ldi door_state, door_closed
+				rjmp TIMER4_END_ONE_SECOND_ELAPSED
+
+
+			TIMER4_END_ONE_SECOND_ELAPSED:
+				; Increment the stop_at_floor progress, and store it back
+				inc temp1
+				sts stop_at_floor_progress, temp1
+
+				; Reset the timer
+				clr temp1
+				sts timer4_TimeCounter, temp1
+
+				rjmp TIMER4_EPILOGUE
+
+		; else if one second has not elapsed, simply store the incremented
+		; counter for the time into TimeCounter, and end interrupt
+		TIMER4_ONE_SECOND_NOT_ELAPSED:
+			sts timer4_TimeCounter, temp1
+
+	TIMER4_EPILOGUE:
+	;Restore conflict registers
+	pop temp1
+	out SREG, temp1
+	pop temp1
+	reti
+
+
 ; Turns the motor on/off depending on the door_state variable
 TIMER5_OVERFLOW:
 
@@ -480,11 +629,6 @@ TIMER5_OVERFLOW:
 
 ; Main procedure
 MAIN:
-	; DEBUGGING - Initilisation of variables to test functionality
-	ldi current_floor, 6
-	ldi lift_direction, 1
-	ldi door_state, door_opening
-
 	; Display current floor on LCD
 	lcd_display_current_floor
 
@@ -589,7 +733,16 @@ MAIN:
 	END_POLL_KEYPRESSES:
 	rjmp MAIN
 	
-HALT: rjmp halt
+HALT: 
+	lds temp1, stop_at_floor
+	out PORTC, temp1
+
+	; Disable all interrupts
+	in temp1, SREG
+	andi temp1, 0b10000000
+	out SREG, temp1
+
+	rjmp halt
 
 ; CONVERSION METHODS FOR KEYPRESS ####################################
 
@@ -627,11 +780,11 @@ CONVERT:
 		ld temp1, X
 		cpi temp1, 0
 			brne CLEAR_FLOORN_IN_ARRAY
-				ldi temp1, 1
+				ldi temp1, true
 				st X, temp1
 				rjmp CONVERT_END
 			CLEAR_FLOORN_IN_ARRAY:				;Remove this: clears the specified floor when the key is pressed again
-				ldi temp1, 0
+				ldi temp1, false
 				st X, temp1	
 
 		rjmp CONVERT_END
