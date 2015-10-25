@@ -16,6 +16,9 @@
 
 ; CONSTANTS #######################################################
 
+; No final destination is set
+.equ no_final_dest = -1
+
 ; Describe lift direction
 .equ dir_up = 1
 .equ dir_stop = 0
@@ -34,10 +37,11 @@
 .equ stop_at_floor_opened_duration = 3
 .equ stop_at_floor_total_duration = 5			; opening_duration + opened_duration + closing_duration
 
-; Time keeping values
+; Time keeping values at a timer prescaling of CLK/8
 .equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
-.equ one_second_overflows = 30				;NOTE: SPECIFICALLY for a 16-bit timer
+.equ one_second_overflows = 7812
+.equ one_second_overflows_16bit = 30			;NOTE: SPECIFICALLY for a 16-bit timer
 
 ; Used for controlling the motor speed
 .equ motor_speed_low = OCR3BL	;using Timer 3, fast PWM mode
@@ -68,15 +72,31 @@
 	do_lcd_data 1, 'r'
 .endmacro
 
+; Disable all interrupts by clearing the i bit in SREG
+; - essentially the opposite of sei
+.macro disable_all_interrupts
+	push temp1
+	in temp1, SREG
+	andi temp1, 0b01111111
+	out SREG, temp1
+	pop temp1
+.endmacro
+
 ; Procedure to reset 2-byte values in program memory
 ; Parameter @0 is the memory address
 .macro clear
 	push temp1
+	push YL
+	push YH
+
 	ldi YL, low(@0)
 	ldi YH, high(@0)
 	clr temp1
 	st Y+, temp1
 	st Y, temp1
+
+	pop YH
+	pop YL
 	pop temp1
 .endmacro
 
@@ -139,7 +159,8 @@
 	stop_at_floor: .byte 1			; flag used to indicate a "stop at current floor" request
 	stop_at_floor_progress: .byte 1	; Progress value of "stop at floor" procedure.
 
-	; Used to count number of timer4 overflows
+	; Used to count the number of timer overflows
+	timer0_TimeCounter: .byte 2				
 	timer4_TimeCounter: .byte 1	
 
 ; CODE SEGMENT ####################################################
@@ -148,7 +169,7 @@
 .org 0
 	rjmp RESET
 
-; Timer 0 overflow interrupt procedure
+; Timer0 overflow interrupt procedure
 .org OVF0addr
 	rjmp TIMER0_OVERFLOW
 
@@ -173,14 +194,13 @@ RESET:
 	ldi temp1, low(RAMEND)
 	out SPL, temp1
 
-	; Prepare Timer 0
+	; Prepare timer 0
 	ldi temp1, 0b00000000			; Operation mode: normal
-	sts TCCR0A, temp1	
+	out TCCR0A, temp1
 	ldi temp1, 0b00000010			; Prescaling: 00000010
-	sts TCCR0B, temp1	
-	ldi temp1, 1<<TOIE0				; Timer interrupt mask
+	out TCCR0B, temp1
+	ldi temp1, 1<<TOIE0				; Timer mask for overflow interrupt
 	sts TIMSK0, temp1
-	
 
 	; Prepare Timer 2 and the LED's
 	ldi temp1, 0b00000000			; Operation mode: normal
@@ -282,6 +302,7 @@ RESET:
 	; Clear all data in dseg
 	clear eighthTimeCounter
 	clear halfTimeCounter
+	clear timer0_TimeCounter
 	clr temp1
 	sts LED_lift_direction_output, temp1
 	sts LED_door_state_output, temp1
@@ -307,65 +328,89 @@ RESET:
 	sts oldRow, temp1
 
 	; DEBUGGING - Initilisation of variables to test functionality
-	ldi current_floor, 6
-	ldi lift_direction, dir_stop
 	ldi door_state, door_closed
-	ldi temp1, true
-	sts stop_at_floor, temp1
+	ldi current_floor, 0
+	ldi final_dest, no_final_dest
+	ldi lift_direction, dir_stop
+	ldi temp1, false
+	sts floor_changed, temp1
 
 	sei
+
 	rjmp MAIN
 
-; Keeping track of the lift movement
+; Control the movement of the lift
 TIMER0_OVERFLOW:
-	; Prologue - save all registers
-	TIMER0_PROLOGUE:
-		push temp1
-		in temp1, SREG
-		push temp1
-		push r26
 
-	; Interrupt body
+	; Prologue - push all registers used to stack
+	TIMER0_PROLOGUE: 
+	push temp1
+	push temp2
+	in temp1, SREG
+	push temp1
+	push YH
+	push YL
+	push r26
+
+	; Check whether the lift should be moving
+	cpi lift_direction, dir_stop
+	breq TIMER0_EPILOGUE
+
+	; Check also that a floor_change has NOT been requested
+	lds temp1, floor_changed
+	cpi temp1, false
+
+	; If floor_change has not been requested,
+	; move the lift by keeping track of the time elapsed
+	breq TIMER0_SIMULATE_LIFT_MOVEMENT
+
+	; Else end timer 0
+	rjmp TIMER0_EPILOGUE
+
+	TIMER0_SIMULATE_LIFT_MOVEMENT:
+
 		; Load TimeCounter, and increment by 1
-		lds temp1, halfTimeCounter
-		lds temp2, halfTimeCounter + 1
+		lds temp1, timer0_TimeCounter
+		lds temp2, timer0_TimeCounter + 1
 		adiw temp2:temp1, 1
 
-		;if TimeCounter value is 3906, then half a second has occurred
-		cpi temp1, low(half_second_overflows)
-		ldi r26, high(half_second_overflows)
+		;if TimeCounter value is 7812, then one second has occurred
+		cpi temp1, low(one_second_overflows)
+		ldi r26, high(one_second_overflows)
 		cpc temp2, r26
-		brne TIMER0_HALF_SECOND_NOT_ELAPSED_label
-		rjmp TIMER0_HALF_SECOND_ELAPSED
+		brne TIMER0_ONE_SECOND_NOT_ELAPSED
 
-			TIMER0_HALF_SECOND_NOT_ELAPSED_LABEL:
-			rjmp TIMER0_HALF_SECOND_NOT_ELAPSED
+		; if one second has occurred, the lift has gone up one floor
+		TIMER0_ONE_SECOND_ELAPSED:
 
-		; if half second has occurred
-		TIMER0_HALF_SECOND_ELAPSED:
+			; Request an update in floor
+			ldi r26, true
+			sts floor_changed, r26
 
-			; do something
-
-			TIMER0_END_HALF_SECOND_ELAPSED:
-			clear halfTimeCounter
+			; Reset the time counter
+			clear timer0_TimeCounter
 			rjmp TIMER0_EPILOGUE
 
 		; else if one second has not elapsed, simply store the incremented
 		; counter for the time into TimeCounter, and end interrupt
-		TIMER0_HALF_SECOND_NOT_ELAPSED:
-			sts halfTimeCounter, r24
-			sts halfTimeCounter+1, r25
+		TIMER0_ONE_SECOND_NOT_ELAPSED:
+			sts timer0_TimeCounter, temp1
+			sts timer0_TimeCounter+1, temp2
 
+	; Epilogue - restore all registers, and return to main
 	TIMER0_EPILOGUE:
-		;Restore conflict registers
-		pop r26
-		pop temp1
-		out SREG, temp1
-		pop temp1
-		reti		
+	pop r26
+	pop YL
+	pop YH
+	pop temp1
+	out SREG, temp1
+	pop temp2
+	pop temp1
+	reti			
 
 ; Describe the door state and lift direction using the LED's
 TIMER2_OVERFLOW:
+
 	; Prologue - save all registers
 	TIMER2_PROLOGUE:
 		push temp1
@@ -380,12 +425,13 @@ TIMER2_OVERFLOW:
 		lds temp2, eighthTimeCounter + 1
 		adiw temp2:temp1, 1
 
-		;if TimeCounter value is 3906, then 1/8th a second has occurred
+		;if TimeCounter value is 976, then 1/8th a second has occurred
 		cpi temp1, low(eighth_second_overflows)
 		ldi r26, high(eighth_second_overflows)
 		cpc temp2, r26
 		brne TIMER2_8th_SECOND_NOT_ELAPSED_label
 		rjmp TIMER2_8th_SECOND_ELAPSED
+
 		TIMER2_8th_SECOND_NOT_ELAPSED_label:
 			rjmp TIMER2_8th_SECOND_NOT_ELAPSED
 
@@ -430,10 +476,10 @@ TIMER2_OVERFLOW:
 
 			;check for lift_direction
 			LED_LIFT_DIRECTION:	
-			cpi lift_direction, 0
+			cpi lift_direction, dir_stop
 			breq LED_STATIONARY
-			cpi lift_direction, 0
-			brlt LED_MOVING_DOWN
+			cpi lift_direction, dir_down
+			breq LED_MOVING_DOWN
 
 			;else lift must be moving up
 			lds temp1, LED_lift_direction_output
@@ -469,7 +515,7 @@ TIMER2_OVERFLOW:
 			out PORTB, temp2
 			sts LED_door_state_output, temp2
 
-			; Reset time counter
+			; Reload the timeCounter values, and reset time counter
 			clear eighthTimeCounter
 			rjmp TIMER2_EPILOGUE
 
@@ -490,6 +536,7 @@ TIMER2_OVERFLOW:
 
 ; Control the "stop at floor" procedure
 TIMER4_OVERFLOW:
+
 	; Prologue - save all registers
 	TIMER4_PROLOGUE:
 	push temp1
@@ -521,7 +568,7 @@ TIMER4_OVERFLOW:
 		inc temp1
 
 		;if TimeCounter value is 30, then one second has occurred (16-bit timer overflows)
-		cpi temp1, one_second_overflows
+		cpi temp1, one_second_overflows_16bit
 		breq TIMER4_ONE_SECOND_ELAPSED
 
 		; Else one second has not been elapsed
@@ -534,7 +581,7 @@ TIMER4_OVERFLOW:
 			
 			; Check the progress, and carry out the appropriate procedure
 			cpi temp1, stop_at_floor_progress_start
-			breq DOOR_IS_OPENING_lol
+			breq DOOR_IS_OPENING
 			cpi temp1, stop_at_floor_total_duration
 			breq DOOR_IS_CLOSED
 			cpi temp1, (stop_at_floor_total_duration - stop_at_floor_closing_duration)
@@ -545,7 +592,7 @@ TIMER4_OVERFLOW:
 				ldi door_state, door_opened
 				rjmp TIMER4_END_ONE_SECOND_ELAPSED
 
-			DOOR_IS_OPENING_lol:
+			DOOR_IS_OPENING:
 				ldi door_state, door_opening
 				rjmp TIMER4_END_ONE_SECOND_ELAPSED
 
@@ -569,6 +616,7 @@ TIMER4_OVERFLOW:
 
 			TIMER4_END_ONE_SECOND_ELAPSED:
 				; Increment the stop_at_floor progress, and store it back
+				lds temp1, stop_at_floor_progress
 				inc temp1
 				sts stop_at_floor_progress, temp1
 
@@ -629,36 +677,89 @@ TIMER5_OVERFLOW:
 
 ; Main procedure
 MAIN:
+
+	; Update curr_floor
+	rcall update_curr_floor
+
 	; Display current floor on LCD
 	lcd_display_current_floor
 
-	; Poll keypresses
-	rcall poll_keypresses
+	; Check if arrived at destination floor
+	cp current_floor, final_dest
+
+	; If arrived, stop lift
+	breq STOP_LIFT
+
+	; Else proceed
+	rjmp START_POLL_KEYPRESSES
+
+	STOP_LIFT:
+		; Stop the lift
+		ldi lift_direction, dir_stop
+
+		; request for a "stop at floor" procedure
+		ldi temp1, true
+		sts stop_at_floor, temp1	
+		
+		; Clear final_dest
+		ldi final_dest, no_final_dest		
+
+	
+	; Poll Keypresses
+	START_POLL_KEYPRESSES:
+
+		; Disable all interrupts
+		disable_all_interrupts
+
+		; Poll the keypresses
+		rjmp poll_keypresses
+
+	MAIN_END_POLL_KEYPRESSES:
+	; Re-enable the interrupts
+	sei
 
 	; Start main again
 	rjmp MAIN
 
 ; DEBUGGING	 - check particular outputs using LED's
 HALT: 
-	lds temp1, stop_at_floor
-	out PORTC, temp1
 
 	; Disable all interrupts
-	in temp1, SREG
-	andi temp1, 0b10000000
-	out SREG, temp1
+	disable_all_interrupts
+
+	out PORTC, current_floor
 
 	rjmp halt
 
 ; GENERAL FUNCTIONS ######################################################
 
-poll_keypresses:
-	; save conflict registers
+; Update the current floor
+update_curr_floor:
+	; Save conflict registers
 	push temp1
-	push temp2
 
-	; poll keypresses
-	START_POLL_KEYPRESSES:
+	; Check if there is a floor changed request
+	lds temp1, floor_changed
+	cpi temp1, true
+
+	; If there is a floor_change request, update the current floor
+	breq FLOOR_HAS_CHANGED
+	rjmp END_UPDATE_CURR_FLOOR
+
+	FLOOR_HAS_CHANGED:
+		add current_floor, lift_direction
+
+		; Clear the floor changed request flag
+		ldi temp1, false
+		sts floor_changed, temp1
+
+	; Restore conflict registers and return
+	END_UPDATE_CURR_FLOOR:
+	pop temp1
+	ret
+
+; Poll the keypad
+POLL_KEYPRESSES:
 	
 	; Prepare column start and end points
 	ldi colmask, INITCOLMASK
@@ -756,10 +857,8 @@ poll_keypresses:
 			rjmp COLUMN_LOOP
 	
 	END_POLL_KEYPRESSES:
-	; restore conflict registers, and return
-	pop temp2
-	pop temp1
-	ret
+	; Return to main when poll keypress procedure completed
+	rjmp MAIN_END_POLL_KEYPRESSES
 
 ; Detect what kind of key was pressed
 ; and carry out appropriate actions
@@ -777,7 +876,7 @@ CONVERT:
 
 	;else input is a number in [0..9]
 	; Display the character value of the number on the bottom line of the LCD
-	NUMBER:
+	NUMBER_conv:
 
 		;determine the number value
 		mov temp1, row
@@ -785,6 +884,31 @@ CONVERT:
 		add temp1, row
 		add temp1, col
 		inc temp1
+
+		; DEBUGGING - set the value pressed as final destination
+		; and trigger the lift to move towards it
+
+		; Set the floor as final dest
+		mov final_dest, temp1
+
+		; Set the lift direction
+		DETERMINE_DIRECTION:
+		cp final_dest, current_floor
+		brlo SET_DIR_DOWN
+		breq SET_DIR_STOP
+
+			; Final dest is greater
+			ldi lift_direction, dir_up
+			rjmp END_DETERMINE_DIRECTION
+
+			SET_DIR_DOWN:
+			ldi lift_direction, dir_down
+			rjmp END_DETERMINE_DIRECTION
+
+			SET_DIR_STOP:
+			ldi lift_direction, dir_stop
+		
+		END_DETERMINE_DIRECTION:
 
 		; Check the corresponding floor in the floor_array
 		ldi XH, high(floor_array)
@@ -794,13 +918,16 @@ CONVERT:
 		adc XH, temp1
 		ld temp1, X
 		cpi temp1, 0
-			brne CLEAR_FLOORN_IN_ARRAY
-				ldi temp1, true
-				st X, temp1
-				rjmp CONVERT_END
-			CLEAR_FLOORN_IN_ARRAY:				; DEBUGGING: clears the specified floor when the key is pressed again
-				ldi temp1, false
-				st X, temp1	
+		brne CLEAR_FLOORN_IN_ARRAY
+
+		; Set the floor
+		ldi temp1, true
+		st X, temp1
+		rjmp CONVERT_END
+
+		CLEAR_FLOORN_IN_ARRAY:				; DEBUGGING: clears the specified floor when the key is pressed again
+			ldi temp1, false
+			st X, temp1	
 
 		rjmp CONVERT_END
 
@@ -830,6 +957,28 @@ CONVERT:
 
 		; Floor pressed is 0 - set in floor_array
 		ZERO:
+
+			; DEBUGGING - set the value pressed as final destination
+			; and trigger the lift to move towards it
+
+			; Set the floor as final dest
+			ldi final_dest, 0
+
+			; Set the lift direction
+			DETERMINE_DIRECTION_0:
+			cp final_dest, current_floor
+			brlo SET_DIR_DOWN_0
+			rjmp SET_DIR_STOP_0		;at this point, we have to be at floor 0
+
+				SET_DIR_DOWN_0:
+				ldi lift_direction, dir_down
+				rjmp END_DETERMINE_DIRECTION_0
+
+				SET_DIR_STOP_0:
+				ldi lift_direction, dir_stop
+		
+			END_DETERMINE_DIRECTION_0:
+
 			lds temp1, floor_array
 			cpi temp1, 0
 			brne CLEAR_FLOOR0_IN_ARRAY
