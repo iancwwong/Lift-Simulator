@@ -16,6 +16,12 @@
 
 ; CONSTANTS #######################################################
 
+; Starting floor number
+.equ starting_floor = 0
+
+; Emergency floor number
+.equ emergency_floor = 9
+
 ; No final destination is set
 .equ no_final_dest = -1
 
@@ -451,20 +457,25 @@ RESET:
 	sts oldCol, temp1
 	sts oldRow, temp1
 
+	; Initialisation of variables
+	ldi door_state, door_closed				; door closed
+	ldi current_floor, starting_floor		; start on floor 0
+	ldi final_dest, no_final_dest			; no final destination set
+	ldi lift_direction, dir_stop			; lift is not moving
+	
+	ldi temp1, false
+	sts floor_changed, temp1				; No floor change
+	sts stop_at_floor, temp1				; No stop_at_floor
+	sts emergency_flag, temp1				; No emergency_mode
+	sts emergency_alarm, temp1				; No emergency_alarm
+
 	; DEBUGGING - Initilisation of variables to test functionality
 	ldi door_state, door_closed
-	ldi current_floor, 0
-	ldi final_dest, no_final_dest
-	ldi lift_direction, dir_stop
-	ldi temp1, false
-	sts floor_changed, temp1
+	ldi current_floor, 6
 
-	clr temp1					; Disable timer 2's interrupt
-	sts TIMSK2, temp1
-	
-	; Turn on emergency alarm
+	; Turn on emergency mode
 	ldi temp1, true
-	sts emergency_alarm, temp1	
+	sts emergency_flag, temp1
 
 	sei
 	rjmp MAIN
@@ -620,10 +631,9 @@ TIMER1_OVERFLOW:
 	; If emergency alarm flag is set, begin timing
 	breq TIMER1_START_TIMING
 
-	; Else not set, make sure strobe LED's are off, and exit
+	; Else not set, make sure the alarm pattern is off, then exit
 	ldi temp1, LED_pattern_off
 	sts LED_emergency_alarm_output, temp1
-	out PORTB, temp1
 	rjmp TIMER1_EPILOGUE
 
 	; Else start keeping track of time
@@ -999,7 +1009,19 @@ TIMER5_OVERFLOW:
 
 ; Main procedure
 MAIN:
-	rjmp HALT
+	; Check if emergency flag is set
+	lds temp1, emergency_flag
+	cpi temp1, true
+
+	; If not set, execute lift in normal mode
+	brne NORMAL_MODE
+
+	; Else execute lift in emergency mode
+	rjmp EMERGENCY_MODE
+
+NORMAL_MODE:
+	; DEBUGGING
+	;rjmp HALT
 
 	; Update curr_floor
 	rcall update_curr_floor
@@ -1027,7 +1049,6 @@ MAIN:
 		; Clear final_dest
 		ldi final_dest, no_final_dest		
 
-	
 	; Poll Keypresses
 	START_POLL_KEYPRESSES:
 
@@ -1044,19 +1065,84 @@ MAIN:
 	; Start main again
 	rjmp MAIN
 
+EMERGENCY_MODE:
+
+	; Prepare emergency_floor as final destination, and wait until emergency_floor is reached
+	SET_EMERGENCY_FLOOR:
+		; Update the current floor
+		rcall update_curr_floor
+
+		; Display current floor on LCD
+		lcd_display_current_floor
+		
+		; Check whether emergency_floor is reached
+		cpi current_floor, emergency_floor
+		breq EMERGENCY_ARRIVAL
+
+		; Else prepare to move the lift
+		disable_all_interrupts
+		ldi final_dest, emergency_floor					; Set final destination to be emergency floor
+		rcall set_lift_direction						; Set the direction of the lift
+		sei												; Re-enable interrupts
+		rjmp SET_EMERGENCY_FLOOR						; Loop back
+		
+	; Carry out "stop at floor" procedure at emergency floor
+	EMERGENCY_ARRIVAL:
+		; Stop the lift
+		ldi lift_direction, dir_stop
+
+		; make a "stop at floor" request
+		ldi temp1, true
+		sts stop_at_floor, temp1
+
+		; Wait until "stop at floor" procedure is completed
+		rcall complete_stop_at_floor
+
+	; Enable the emergency alarm
+	TURN_ON_EMERGENCY_ALARM:
+		; Disable timer2 so that emergency alarm can be displayed
+		ldi temp1, 0
+		sts TIMSK2, temp1
+
+		; Turn on emergency_alarm
+		ldi temp1, true
+		sts emergency_alarm, temp1
+
+	; Display the emergency message
+	reset_lcd_display
+	lcd_display_emergency_message
+	
+	; Wait until emergency key is pressed again (ie cancelled)
+	RESET_EMERGENCY_FLAG:
+		; Start polling for emergency key
+		MAIN_START_POLL_EMERGENCY_KEY:
+		rjmp POLL_EMERGENCY_KEY
+		MAIN_END_POLL_EMERGENCY_KEY:
+
+		; Check if lift is still in emergency mode
+		lds temp1, emergency_flag
+		cpi temp1, true
+	
+		; If still set, poll again for emergency flag
+		breq MAIN_START_POLL_EMERGENCY_KEY
+
+	; Resume normal operation of the lift
+	RESUME_NORMAL_MODE:
+		; Turn off emergency_alarm
+		ldi temp1, false
+		sts emergency_alarm, temp1
+
+		; Re-enable Timer2 interrupt
+		ldi temp1, (1 << TOIE2)
+		sts TIMSK2, temp1
+
+		; Return to main
+		reset_lcd_display
+		rjmp MAIN
+
+
 ; DEBUGGING	 - check particular outputs using LED's
 HALT: 
-	lcd_display_emergency_message
-
-	lds temp1, emergency_flag
-	out PORTC, temp1
-
-	; Start polling for emergency key
-	MAIN_START_POLL_EMERGENCY_KEY:
-
-	rjmp POLL_EMERGENCY_KEY
-
-	MAIN_END_POLL_EMERGENCY_KEY:
 
 	rjmp halt 
 
@@ -1086,6 +1172,46 @@ update_curr_floor:
 	END_UPDATE_CURR_FLOOR:
 	pop temp1
 	ret
+
+; Determines the lift direction based on the relativity of final floor with current floor
+set_lift_direction:
+	cp final_dest, current_floor
+
+	; If final dest is lower than current floor, direction is down
+	brlo SET_DIR_DOWN
+
+	; If final dest is lower than current floor, direction is down
+	breq SET_DIR_STOP
+
+	; Else direction must be up
+	ldi lift_direction, dir_up
+	rjmp END_SET_LIFT_DIRECTION
+
+	SET_DIR_DOWN:
+	ldi lift_direction, dir_down
+	rjmp END_SET_LIFT_DIRECTION
+
+	SET_DIR_STOP:
+	ldi lift_direction, dir_stop
+
+	END_SET_LIFT_DIRECTION:
+	ret
+
+; Wait until the "stop at floor" procedure is completed
+complete_stop_at_floor:
+	push temp1
+	
+	STOP_AT_FLOOR_LOOP:
+	; Check whether the stop_at_floor is set
+	lds temp1, stop_at_floor
+	cpi temp1, true
+	
+	; If set, then loop back
+	breq STOP_AT_FLOOR_LOOP
+	
+	; else end
+	pop temp1
+	reti	
 
 ; Poll the keypad
 POLL_KEYPRESSES:
@@ -1218,24 +1344,8 @@ CONVERT:
 		; Set the floor as final dest
 		mov final_dest, temp1
 
-		; Set the lift direction
-		DETERMINE_DIRECTION:
-		cp final_dest, current_floor
-		brlo SET_DIR_DOWN
-		breq SET_DIR_STOP
-
-			; Final dest is greater
-			ldi lift_direction, dir_up
-			rjmp END_DETERMINE_DIRECTION
-
-			SET_DIR_DOWN:
-			ldi lift_direction, dir_down
-			rjmp END_DETERMINE_DIRECTION
-
-			SET_DIR_STOP:
-			ldi lift_direction, dir_stop
-		
-		END_DETERMINE_DIRECTION:
+		; Set the direction
+		rcall set_lift_direction
 
 		; Check the corresponding floor in the floor_array
 		ldi XH, high(floor_array)
@@ -1273,13 +1383,14 @@ CONVERT:
 
 		rjmp HASH
 
-		; Result must be a hash at this point
-		; read number on the bottom line, and display using LED's
+		; Do nothing
 		HASH:
 			rjmp CONVERT_END
 
-		; Reset display on LCD
+		; Enable emergency mode
 		STAR:
+			ldi temp1, true
+			sts emergency_flag, temp1
 			rjmp CONVERT_END
 
 		; Floor pressed is 0 - set in floor_array
@@ -1320,7 +1431,7 @@ CONVERT:
 		rjmp END_POLL_KEYPRESSES
 
 ; Poll the emergency key, ie the '*' symbol 
-; located in column 0, row 3
+; located in column 0, row 3 (bottom left of keypad)
 POLL_EMERGENCY_KEY:
 	
 	; Prepare column start and end points
