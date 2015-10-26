@@ -30,6 +30,11 @@
 .equ door_opened = 2
 .equ door_closing = 3
 
+; Describe the door request
+.equ door_no_request = 0
+.equ door_close_request = 1
+.equ door_open_request = 2
+
 ; Durations (in seconds) used for the "stop at floor" procedure
 .equ stop_at_floor_progress_start = 0
 .equ stop_at_floor_opening_duration = 1
@@ -100,6 +105,28 @@
 	pop temp1
 .endmacro
 
+; delay the program by counting DOWN a provided value until 0 MULTIPLE TIMES
+; NOTE: The provided value uses 2 bytes (so contains a high and low value)
+; @0: low value for the desired delay time
+; @1: high value for the desired delay time
+; @2: number of times to decrement the value
+.macro debounce_delay
+	push temp1
+	push temp2
+	;delay by decrementing the specified values to 0
+	DEBOUNCE_DELAY_LOOP:
+		rcall delay
+		ldi temp2, @1
+		ldi temp1, @0
+
+	;decrement the overall number of times the number has reached 0
+	dec @2
+	cpi @2, 0
+	brne DEBOUNCE_DELAY_LOOP
+	pop temp2
+	pop temp1
+.endmacro
+
 ; Conduct the command
 ; Parameters:
 ;	@0: if 0, @1 is loaded into temp1 as an immediate value
@@ -161,13 +188,27 @@
 
 	; Used to count the number of timer overflows
 	timer0_TimeCounter: .byte 2				
-	timer4_TimeCounter: .byte 1	
+	timer4_TimeCounter: .byte 1
+	
+	; Flags used as a software approach to reading in button presses reliably
+	pb0_button_pushed: .byte 1	
+	pb1_button_pushed: .byte 1
+	
+	; Used to indicate whether door quick-close or quick-open was requested
+	; 0: no request made
+	; 1: close request made
+	; 2: open request made
+	door_state_change_request: .byte 1		
 
 ; CODE SEGMENT ####################################################
 .cseg
 
 .org 0
 	rjmp RESET
+
+; 	Interrupt procedure when PB0 button was pushed
+.org INT0addr
+	jmp EXT_INT0
 
 ; Timer0 overflow interrupt procedure
 .org OVF0addr
@@ -193,6 +234,13 @@ RESET:
 	out SPH, temp1
 	ldi temp1, low(RAMEND)
 	out SPL, temp1
+
+	; Prepare PB0 as an interrupt
+	ldi temp1, (2 << ISC00)
+	sts EICRA, temp1
+	in temp1, EIMSK					; Enable the push button interrupts
+	ori temp1, (1 << INT0)
+	out EIMSK, temp1
 
 	; Prepare timer 0
 	ldi temp1, 0b00000000			; Operation mode: normal
@@ -309,6 +357,8 @@ RESET:
 	sts floor_changed, temp1
 	sts stop_at_floor, temp1
 	sts stop_at_floor_progress, temp1
+	sts pb0_button_pushed, temp1
+	sts door_state_change_request, temp1
 
 	; Clear the floor_array
 	sts floor_array, temp1
@@ -336,8 +386,74 @@ RESET:
 	sts floor_changed, temp1
 
 	sei
-
 	rjmp MAIN
+
+; PB0 button was pressed - request door to quick-close
+; during the "stop at floor" procedure
+; NOTE: Relies on the fact that the door is ONLY opened during the "stop at floor" procedure
+EXT_INT0:
+	; save all conflict registers
+	push r26
+	push temp2
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	; check if pb_0 button was pushed
+	lds temp1, pb0_button_pushed
+	cpi temp1, false
+
+	; if false, then go to PROCEED
+	breq PB0_proceed
+
+	; else clear pb0_button_pushed, and exit
+	ldi temp1, false
+	sts pb0_button_pushed,temp1
+	rjmp EXT_INT0_end
+
+	; set pb0 to be pushed
+	PB0_proceed:
+	ldi temp1, true
+	sts pb0_button_pushed, temp1
+
+	; check if button was pressed
+	ldi temp2, 0b10000000
+	in temp1, PIND7					;read the output from PIND (where the push button sends its data)
+	and temp1, temp2
+	cpi temp1, 0
+	breq EXT_INT0_end				;button was not pressed - a 0 signal was found
+
+	; if button was pressed / 1 signal detected: wait
+	ldi r26, 10
+	debounce_delay low(60000), high(60000), r26
+
+	; check again if button really was pressed
+	ldi temp2, 0b10000000
+	in temp1, PIND7
+	and temp1, temp2
+	cpi temp1, 0
+	breq EXT_INT0_END
+
+	; Check whether there is a stop at floor request
+	lds temp1, stop_at_floor
+	cpi temp1, true
+
+	; If not, ignore request to close door
+	brne EXT_INT0_END
+
+	; Button is pressed - request to close doors
+	ldi temp1, door_close_request
+	sts door_state_change_request, temp1
+
+	; restore all the registers
+	EXT_INT0_END:
+	pop temp1
+	out SREG, temp1
+	pop temp1
+	pop temp2
+	pop r26
+
+	reti
 
 ; Control the movement of the lift
 TIMER0_OVERFLOW:
@@ -555,14 +671,61 @@ TIMER4_OVERFLOW:
 	rjmp TIMER4_EPILOGUE
 
 	; Start tracking the progress and changing the door state.
-	; NOTE: progress can go from 0-5 (progress essentially represents number of seconds elapsed
-	; 		while the stop_at_floor flag is set):
-	; for 0-1 seconds, door is opening
-	; for 1-4 seconds, door is opened
-	; for 4-5 seconds, door is closing
-	; for 5 seconds onwards, door is closed
 	TIMER4_TRACK_PROGRESS:
 
+		; Check for any door change requests
+		; Check for door close request
+		lds temp1, door_state_change_request
+		cpi temp1, door_close_request
+
+		; If there is a request to close the door, execute the quick-close procedure
+		; NOTE: the door will ONLY quick-close if the door is opened
+		breq QUICK_CLOSE_DOOR
+
+		; Else continue with tracking the time 
+		rjmp TIMER4_TRACK_TIME
+
+		QUICK_CLOSE_DOOR:
+			; Check whether the door is opening
+			; ie progress < start + opening_duration
+			lds temp1, stop_at_floor_progress
+			cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration
+
+			; If so, continue on with tracking the time/progress
+			brlt TIMER4_TRACK_TIME
+
+			; Check whether the door is closing
+			; ie prgress  = total_duration - closing duration
+			cpi temp1, stop_at_floor_total_duration - stop_at_floor_closing_duration
+	
+			; If equal, then clear door_request (since door is already closing)
+			; and continue on with tracking time/progress
+			brge DOOR_ALREADY_CLOSING
+
+			; Else accept the door_close request, reset timeCounter, and
+			; set the progress to be at that point where door closes
+			; ie progress = total_duration - closing_duration
+			QUICK_CLOSE:
+				; Clear the door_change request
+				ldi temp1, door_no_request
+				sts door_state_change_request, temp1
+
+				; Change progress to the point where door should start closing
+				ldi temp1, stop_at_floor_total_duration - stop_at_floor_closing_duration
+				sts stop_at_floor_progress, temp1
+
+				; Reset timeCounter
+				clr temp1
+				sts timer4_TimeCounter, temp1
+
+				; End interrupt
+				rjmp TIMER4_EPILOGUE
+
+			DOOR_ALREADY_CLOSING:
+				ldi temp1, door_no_request
+				sts door_state_change_request, temp1
+
+		TIMER4_TRACK_TIME:
 		; Load TimeCounter, and increment by 1
 		lds temp1, timer4_TimeCounter
 		inc temp1
@@ -727,9 +890,10 @@ HALT:
 	; Disable all interrupts
 	disable_all_interrupts
 
-	out PORTC, current_floor
+	ser temp1
+	out PORTC, temp1
 
-	rjmp halt
+	rjmp halt 
 
 ; GENERAL FUNCTIONS ######################################################
 
@@ -781,13 +945,11 @@ POLL_KEYPRESSES:
 		SCAN_COLUMN:
 		; else scan the column
 		sts PORTL, colmask 
-		ldi temp1, 0xFF
-		
+				
 		; slow down scan operation
-		DELAY:
-			dec temp1
-			cpi temp1, 0
-			brne DELAY
+		ldi temp1, 0xFF
+		ldi temp2, 0
+		rcall delay
 
 		lds temp1, PINL				; Read PORT A			
 		andi temp1, OUTPUTMASK		; Get keypad output value
@@ -991,6 +1153,21 @@ CONVERT:
 		
 	CONVERT_END:
 		rjmp END_POLL_KEYPRESSES
+
+;Delay by subtracting a pair of values until they are 0
+; uses the values preloaded in value_low, and value_high
+delay:
+	DELAY_LOOP:
+		;subtract 1 from the pair of values
+		subi temp1, low(1)
+		sbci temp2, high(1)
+
+	;check whether value is 0
+	cpi temp1, 0
+	brne DELAY_LOOP
+	cpi temp2, 0
+	brne DELAY_LOOP
+	ret
 
 ; FUNCTIONS USED FOR THE LCD	##########################################
 ; Some constants
