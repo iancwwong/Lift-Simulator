@@ -1,5 +1,5 @@
 
-AVRASM ver. 2.1.42  C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\lift_simulator.asm Tue Oct 27 04:43:31 2015
+AVRASM ver. 2.1.42  C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm Tue Oct 27 04:54:34 2015
 
 
 EQU  SIGNATURE_000 0000001e
@@ -1395,7 +1395,7 @@ EQU  stop_at_floor_opened_duration 00000003
 EQU  stop_at_floor_total_duration 00000005
 EQU  half_second_overflows 00000f42
 EQU  eighth_second_overflows 000003d0
-EQU  one_second_overflows 00001e84
+EQU  two_second_overflows 00003d08
 EQU  one_second_overflows_16bit 0000001e
 EQU  tenth_second_overflows_16bit 00000003
 EQU  motor_speed_low 0000009a
@@ -1458,8 +1458,8 @@ CSEG delay        0000066c
 CSEG TIMER0_PROLOGUE 0000019f
 CSEG TIMER0_EPILOGUE 000001c9
 CSEG TIMER0_SIMULATE_LIFT_MOVEMENT 000001ad
-CSEG TIMER0_ONE_SECOND_NOT_ELAPSED 000001c5
-CSEG TIMER0_ONE_SECOND_ELAPSED 000001b6
+CSEG TIMER0_TWO_SECOND_NOT_ELAPSED 000001c5
+CSEG TIMER0_TWO_SECOND_ELAPSED 000001b6
 CSEG TIMER1_PROLOGUE 000001d1
 CSEG TIMER1_START_TIMING 000001dc
 CSEG TIMER1_EPILOGUE 000001f4

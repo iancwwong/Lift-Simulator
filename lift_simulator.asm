@@ -60,7 +60,7 @@
 ; at a timer prescaling of CLK/8
 .equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
-.equ one_second_overflows = 7812
+.equ two_second_overflows = 15624
 .equ one_second_overflows_16bit = 30			; NOTE: SPECIFICALLY for a 16-bit timer
 .equ tenth_second_overflows_16bit = 3			
 
@@ -582,14 +582,14 @@ TIMER0_OVERFLOW:
 		lds temp2, timer0_TimeCounter + 1
 		adiw temp2:temp1, 1
 
-		;if TimeCounter value is 7812, then one second has occurred
-		cpi temp1, low(one_second_overflows)
-		ldi r26, high(one_second_overflows)
+		;if TimeCounter value is two_second_overflows, then 2 seconds has occurred
+		cpi temp1, low(two_second_overflows)
+		ldi r26, high(two_second_overflows)
 		cpc temp2, r26
-		brne TIMER0_ONE_SECOND_NOT_ELAPSED
+		brne TIMER0_TWO_SECOND_NOT_ELAPSED
 
 		; if one second has occurred, the lift has gone up one floor
-		TIMER0_ONE_SECOND_ELAPSED:
+		TIMER0_TWO_SECOND_ELAPSED:
 
 			; Request an update in floor
 			ldi r26, true
@@ -601,7 +601,7 @@ TIMER0_OVERFLOW:
 
 		; else if one second has not elapsed, simply store the incremented
 		; counter for the time into TimeCounter, and end interrupt
-		TIMER0_ONE_SECOND_NOT_ELAPSED:
+		TIMER0_TWO_SECOND_NOT_ELAPSED:
 			sts timer0_TimeCounter, temp1
 			sts timer0_TimeCounter+1, temp2
 
