@@ -298,7 +298,7 @@
 .org 0
 	rjmp RESET
 
-; 	Interrupt procedure when PB0 button was pushed
+; Interrupt procedure when PB0 button was pushed
 .org INT0addr
 	jmp EXT_INT0
 
