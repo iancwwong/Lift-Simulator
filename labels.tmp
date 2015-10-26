@@ -45,14 +45,14 @@
   <TIMER2_OVERFLOW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>692</LINE></TIMER2_OVERFLOW>
   <TIMER4_OVERFLOW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>819</LINE></TIMER4_OVERFLOW>
   <TIMER5_OVERFLOW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>975</LINE></TIMER5_OVERFLOW>
-  <lcd_command><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1554</LINE></lcd_command>
-  <lcd_wait><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1574</LINE></lcd_wait>
-  <sleep_5ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1610</LINE></sleep_5ms>
-  <sleep_1ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1598</LINE></sleep_1ms>
+  <lcd_command><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1561</LINE></lcd_command>
+  <lcd_wait><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1581</LINE></lcd_wait>
+  <sleep_5ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1617</LINE></sleep_5ms>
+  <sleep_1ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1605</LINE></sleep_1ms>
   <MAIN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1011</LINE></MAIN>
   <PB0_proceed><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>507</LINE></PB0_proceed>
   <EXT_INT0_end><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>541</LINE></EXT_INT0_end>
-  <delay><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1525</LINE></delay>
+  <delay><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1532</LINE></delay>
   <TIMER0_PROLOGUE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>554</LINE></TIMER0_PROLOGUE>
   <TIMER0_EPILOGUE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>609</LINE></TIMER0_EPILOGUE>
   <TIMER0_SIMULATE_LIFT_MOVEMENT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>578</LINE></TIMER0_SIMULATE_LIFT_MOVEMENT>
@@ -102,60 +102,60 @@
   <TIMER5_EPILOGUE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1003</LINE></TIMER5_EPILOGUE>
   <NORMAL_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1022</LINE></NORMAL_MODE>
   <EMERGENCY_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1068</LINE></EMERGENCY_MODE>
-  <update_curr_floor><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1159</LINE></update_curr_floor>
-  <lcd_data><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1563</LINE></lcd_data>
+  <update_curr_floor><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1166</LINE></update_curr_floor>
+  <lcd_data><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1570</LINE></lcd_data>
   <STOP_LIFT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1041</LINE></STOP_LIFT>
   <START_POLL_KEYPRESSES><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1053</LINE></START_POLL_KEYPRESSES>
-  <poll_keypresses><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1224</LINE></poll_keypresses>
+  <poll_keypresses><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1231</LINE></poll_keypresses>
   <MAIN_END_POLL_KEYPRESSES><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1061</LINE></MAIN_END_POLL_KEYPRESSES>
   <COMPLETE_ANY_STOP_AT_FLOOR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1071</LINE></COMPLETE_ANY_STOP_AT_FLOOR>
-  <complete_stop_at_floor><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1208</LINE></complete_stop_at_floor>
-  <SET_EMERGENCY_FLOOR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1078</LINE></SET_EMERGENCY_FLOOR>
-  <EMERGENCY_ARRIVAL><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1097</LINE></EMERGENCY_ARRIVAL>
-  <set_lift_direction><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1184</LINE></set_lift_direction>
-  <TURN_ON_EMERGENCY_ALARM><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1109</LINE></TURN_ON_EMERGENCY_ALARM>
-  <RESET_EMERGENCY_FLAG><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1123</LINE></RESET_EMERGENCY_FLAG>
-  <MAIN_START_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1125</LINE></MAIN_START_POLL_EMERGENCY_KEY>
-  <POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1442</LINE></POLL_EMERGENCY_KEY>
-  <MAIN_END_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1127</LINE></MAIN_END_POLL_EMERGENCY_KEY>
-  <RESUME_NORMAL_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1137</LINE></RESUME_NORMAL_MODE>
-  <HALT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1152</LINE></HALT>
-  <FLOOR_HAS_CHANGED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1171</LINE></FLOOR_HAS_CHANGED>
-  <END_UPDATE_CURR_FLOOR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1179</LINE></END_UPDATE_CURR_FLOOR>
-  <SET_DIR_DOWN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1197</LINE></SET_DIR_DOWN>
-  <SET_DIR_STOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1201</LINE></SET_DIR_STOP>
-  <END_SET_LIFT_DIRECTION><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1204</LINE></END_SET_LIFT_DIRECTION>
-  <STOP_AT_FLOOR_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1211</LINE></STOP_AT_FLOOR_LOOP>
-  <COLUMN_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1231</LINE></COLUMN_LOOP>
-  <SCAN_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1243</LINE></SCAN_COLUMN>
-  <END_POLL_KEYPRESSES><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1319</LINE></END_POLL_KEYPRESSES>
-  <NEXT_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1313</LINE></NEXT_COLUMN>
-  <ROW_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1265</LINE></ROW_LOOP>
-  <CHECK_COL_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1282</LINE></CHECK_COL_PRESSED>
-  <NEXT_ROW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1307</LINE></NEXT_ROW>
-  <CHECK_ROW_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1294</LINE></CHECK_ROW_PRESSED>
-  <CONVERT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1325</LINE></CONVERT>
-  <LETTER_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1378</LINE></LETTER_conv>
-  <SYMBOL_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1382</LINE></SYMBOL_conv>
-  <NUMBER_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1339</LINE></NUMBER_conv>
-  <CLEAR_FLOORN_IN_ARRAY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1372</LINE></CLEAR_FLOORN_IN_ARRAY>
-  <CONVERT_END><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1437</LINE></CONVERT_END>
-  <STAR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1398</LINE></STAR>
-  <ZERO><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1404</LINE></ZERO>
-  <HASH><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1394</LINE></HASH>
-  <DETERMINE_DIRECTION_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1413</LINE></DETERMINE_DIRECTION_0>
-  <SET_DIR_DOWN_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1418</LINE></SET_DIR_DOWN_0>
-  <SET_DIR_STOP_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1422</LINE></SET_DIR_STOP_0>
-  <END_DETERMINE_DIRECTION_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1425</LINE></END_DETERMINE_DIRECTION_0>
-  <CLEAR_FLOOR0_IN_ARRAY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1433</LINE></CLEAR_FLOOR0_IN_ARRAY>
-  <CHECK_EMERGENCY_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1450</LINE></CHECK_EMERGENCY_COLUMN>
-  <CHECK_EMERGENCY_ROW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1466</LINE></CHECK_EMERGENCY_ROW>
-  <END_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1498</LINE></END_POLL_EMERGENCY_KEY>
-  <CHECK_EMERGENCY_KEY_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1482</LINE></CHECK_EMERGENCY_KEY_PRESSED>
-  <PROCESS_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1503</LINE></PROCESS_EMERGENCY_KEY>
-  <EXIT_EMERGENCY_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1517</LINE></EXIT_EMERGENCY_MODE>
-  <DELAY_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1526</LINE></DELAY_LOOP>
-  <lcd_wait_loop><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1580</LINE></lcd_wait_loop>
-  <delayloop_1ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1603</LINE></delayloop_1ms>
+  <SET_EMERGENCY_FLOOR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1085</LINE></SET_EMERGENCY_FLOOR>
+  <complete_stop_at_floor><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1215</LINE></complete_stop_at_floor>
+  <EMERGENCY_ARRIVAL><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1104</LINE></EMERGENCY_ARRIVAL>
+  <set_lift_direction><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1191</LINE></set_lift_direction>
+  <TURN_ON_EMERGENCY_ALARM><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1116</LINE></TURN_ON_EMERGENCY_ALARM>
+  <RESET_EMERGENCY_FLAG><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1130</LINE></RESET_EMERGENCY_FLAG>
+  <MAIN_START_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1132</LINE></MAIN_START_POLL_EMERGENCY_KEY>
+  <POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1449</LINE></POLL_EMERGENCY_KEY>
+  <MAIN_END_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1134</LINE></MAIN_END_POLL_EMERGENCY_KEY>
+  <RESUME_NORMAL_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1144</LINE></RESUME_NORMAL_MODE>
+  <HALT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1159</LINE></HALT>
+  <FLOOR_HAS_CHANGED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1178</LINE></FLOOR_HAS_CHANGED>
+  <END_UPDATE_CURR_FLOOR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1186</LINE></END_UPDATE_CURR_FLOOR>
+  <SET_DIR_DOWN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1204</LINE></SET_DIR_DOWN>
+  <SET_DIR_STOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1208</LINE></SET_DIR_STOP>
+  <END_SET_LIFT_DIRECTION><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1211</LINE></END_SET_LIFT_DIRECTION>
+  <STOP_AT_FLOOR_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1218</LINE></STOP_AT_FLOOR_LOOP>
+  <COLUMN_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1238</LINE></COLUMN_LOOP>
+  <SCAN_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1250</LINE></SCAN_COLUMN>
+  <END_POLL_KEYPRESSES><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1326</LINE></END_POLL_KEYPRESSES>
+  <NEXT_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1320</LINE></NEXT_COLUMN>
+  <ROW_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1272</LINE></ROW_LOOP>
+  <CHECK_COL_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1289</LINE></CHECK_COL_PRESSED>
+  <NEXT_ROW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1314</LINE></NEXT_ROW>
+  <CHECK_ROW_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1301</LINE></CHECK_ROW_PRESSED>
+  <CONVERT><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1332</LINE></CONVERT>
+  <LETTER_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1385</LINE></LETTER_conv>
+  <SYMBOL_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1389</LINE></SYMBOL_conv>
+  <NUMBER_conv><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1346</LINE></NUMBER_conv>
+  <CLEAR_FLOORN_IN_ARRAY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1379</LINE></CLEAR_FLOORN_IN_ARRAY>
+  <CONVERT_END><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1444</LINE></CONVERT_END>
+  <STAR><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1405</LINE></STAR>
+  <ZERO><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1411</LINE></ZERO>
+  <HASH><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1401</LINE></HASH>
+  <DETERMINE_DIRECTION_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1420</LINE></DETERMINE_DIRECTION_0>
+  <SET_DIR_DOWN_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1425</LINE></SET_DIR_DOWN_0>
+  <SET_DIR_STOP_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1429</LINE></SET_DIR_STOP_0>
+  <END_DETERMINE_DIRECTION_0><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1432</LINE></END_DETERMINE_DIRECTION_0>
+  <CLEAR_FLOOR0_IN_ARRAY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1440</LINE></CLEAR_FLOOR0_IN_ARRAY>
+  <CHECK_EMERGENCY_COLUMN><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1457</LINE></CHECK_EMERGENCY_COLUMN>
+  <CHECK_EMERGENCY_ROW><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1473</LINE></CHECK_EMERGENCY_ROW>
+  <END_POLL_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1505</LINE></END_POLL_EMERGENCY_KEY>
+  <CHECK_EMERGENCY_KEY_PRESSED><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1489</LINE></CHECK_EMERGENCY_KEY_PRESSED>
+  <PROCESS_EMERGENCY_KEY><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1510</LINE></PROCESS_EMERGENCY_KEY>
+  <EXIT_EMERGENCY_MODE><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1524</LINE></EXIT_EMERGENCY_MODE>
+  <DELAY_LOOP><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1533</LINE></DELAY_LOOP>
+  <lcd_wait_loop><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1587</LINE></lcd_wait_loop>
+  <delayloop_1ms><FILE>C:\Users\Ian\Desktop\15s2\COMP2121\Assignments\Project\Lift-Simulator\lift_simulator.asm</FILE><LINE>1610</LINE></delayloop_1ms>
  </LABELS>
 </ASSEMBLER_INFO>
