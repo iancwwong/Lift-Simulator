@@ -1067,6 +1067,13 @@ NORMAL_MODE:
 
 EMERGENCY_MODE:
 
+	; Complete any stop at floor procedures currently being executed
+	COMPLETE_ANY_STOP_AT_FLOOR:
+		; Send door_close request
+		ldi temp1, door_close_request
+		sts door_state_change_request, temp1
+		rcall complete_stop_at_floor
+
 	; Prepare emergency_floor as final destination, and wait until emergency_floor is reached
 	SET_EMERGENCY_FLOOR:
 		; Update the current floor
