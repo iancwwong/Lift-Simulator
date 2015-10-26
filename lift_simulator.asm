@@ -35,6 +35,14 @@
 .equ door_close_request = 1
 .equ door_open_request = 2
 
+; LED patterns
+.equ LED_pattern_off = 0
+.equ LED_door_closed_pattern = 0b00001000
+.equ LED_door_opening_pattern = 0b00000100
+.equ LED_door_opened_pattern = 0b00000100
+.equ LED_door_closing_pattern = 0b00001000
+.equ LED_emergency_alarm_pattern = 0b00001100
+
 ; Durations (in seconds) used for the "stop at floor" procedure
 .equ stop_at_floor_progress_start = 0
 .equ stop_at_floor_opening_duration = 1
@@ -42,11 +50,13 @@
 .equ stop_at_floor_opened_duration = 3
 .equ stop_at_floor_total_duration = 5			; opening_duration + opened_duration + closing_duration
 
-; Time keeping values at a timer prescaling of CLK/8
+; Time keeping values represented by number of overflows
+; at a timer prescaling of CLK/8
 .equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
 .equ one_second_overflows = 7812
-.equ one_second_overflows_16bit = 30			;NOTE: SPECIFICALLY for a 16-bit timer
+.equ one_second_overflows_16bit = 30			; NOTE: SPECIFICALLY for a 16-bit timer
+.equ tenth_second_overflows_16bit = 3			
 
 ; Used for controlling the motor speed
 .equ motor_speed_low = OCR3BL	;using Timer 3, fast PWM mode
@@ -54,21 +64,26 @@
 .equ full_motor_speed = 0xFF
 .equ no_motor_speed = 0
 
+; Describe the location of the emergency key on the keypad
+; ie the '*' symbol
+.equ emergency_key_col = 0
+.equ emergency_key_row = 3
+
 ; Used for scanning the keypad
 .equ PORTLDIR = 0xF0			; PD7-4: output, PD3-0: input
 .equ INITCOLMASK = 0xEF			; Scan from leftmost column
 .equ INITROWMASK = 0x01			; Scan from topmost row
 .equ OUTPUTMASK = 0x0F
 
+; Special keypad mask initialisation for emergency key
+.equ EMERGCOLMASK = 0xEF		; leftmost column
+.equ EMERGROWMASK = 0x08		; lowest row
+
 ; Boolean values
 .equ true = 1
 .equ false = 0		
 
 ; MACROS ##########################################################
-
-.macro change_floor
-	add current_floor, lift_direction
-.endmacro
 
 ; Clears the LCD
 .macro reset_lcd_display
@@ -111,6 +126,34 @@
 	mov temp1, current_floor
 	subi temp1, -'0'
 	do_lcd_data 1, 'r'
+.endmacro
+
+; Displays the emergency message through the LCD in the format:
+; 	Emergency
+; 	Call 000
+.macro lcd_display_emergency_message
+
+	; Display initial message
+	do_lcd_command 0, 0b10000100	; set cursor to 4th position on top line
+	do_lcd_data 0, 'E'
+	do_lcd_data 0, 'm'
+	do_lcd_data 0, 'e'
+	do_lcd_data 0, 'r'
+	do_lcd_data 0, 'g'
+	do_lcd_data 0, 'e'
+	do_lcd_data 0, 'n'
+	do_lcd_data 0, 'c'
+	do_lcd_data 0, 'y'
+
+	do_lcd_command 0, 0b10101100	; set cursor to 5th position on bottom line
+	do_lcd_data 0, 'C'
+	do_lcd_data 0, 'a'
+	do_lcd_data 0, 'l'
+	do_lcd_data 0, 'l'
+	do_lcd_data 0, ' '
+	do_lcd_data 0, '0'
+	do_lcd_data 0, '0'
+	do_lcd_data 0, '0'
 .endmacro
 
 ; Disable all interrupts by clearing the i bit in SREG
@@ -208,33 +251,40 @@
 	floor_array: .byte 10					; Array of flags to keep track of which floors are requested to be visited
 	floor_changed: .byte 1					; Flag used to indicate the floor level has changed
 
-	LED_lift_direction_output: .byte 1		; LED pattern for the lift direction component
-	LED_door_state_output: .byte 1			; LED pattern for the door state component
-	
-	eighthTimeCounter: .byte 2				; Used to calculate whether 1/8th second has passed
-	halfTimeCounter: .byte 2				; Used to calculate whether 1/2 second has passed
-
-	; Used for recording keypad presses reliably
-	oldCol: .byte 1
-	oldRow: .byte 1
-
 	; Used for a "Stop at floor" request
 	stop_at_floor: .byte 1			; flag used to indicate a "stop at current floor" request
 	stop_at_floor_progress: .byte 1	; Progress value of "stop at floor" procedure.
 
-	; Used to count the number of timer overflows
-	timer0_TimeCounter: .byte 2				
-	timer4_TimeCounter: .byte 1
-	
-	; Flags used as a software approach to reading in button presses reliably
-	pb0_button_pushed: .byte 1	
-	pb1_button_pushed: .byte 1
-	
 	; Used to indicate whether door quick-close or quick-open was requested
 	; 0: no request made
 	; 1: close request made
 	; 2: open request made
-	door_state_change_request: .byte 1		
+	door_state_change_request: .byte 1	
+
+	; Emergency mode variables
+	emergency_flag: .byte 1					; Indicate whether emergency mode was requested
+	emergency_alarm: .byte 1				; Inidicate whether emergency alarm is triggered
+
+	; LED patterns that are outputted
+	LED_lift_direction_output: .byte 1		; lift direction component
+	LED_door_state_output: .byte 1			; door state component
+	LED_emergency_alarm_output: .byte 1		; emergency alarm display
+	
+	; Used to count the number of timer overflows
+	timer0_TimeCounter: .byte 2		
+	timer1_TimeCounter: .byte 1		
+	timer4_TimeCounter: .byte 1
+
+	eighthTimeCounter: .byte 2				; Used to calculate whether 1/8th second has passed
+	halfTimeCounter: .byte 2				; Used to calculate whether 1/2 second has passed
+	
+	; Flags used as a software approach to reading in button presses reliably
+	pb0_button_pushed: .byte 1	
+	pb1_button_pushed: .byte 1
+
+	; Used for recording keypad presses reliably
+	oldCol: .byte 1
+	oldRow: .byte 1	
 
 ; CODE SEGMENT ####################################################
 .cseg
@@ -249,6 +299,10 @@
 ; Timer0 overflow interrupt procedure
 .org OVF0addr
 	rjmp TIMER0_OVERFLOW
+
+; Timer1 overflow interrupt procedure
+.org OVF1addr
+	rjmp TIMER1_OVERFLOW
 
 ; Timer 2 overflow interrupt procedure
 .org OVF2addr
@@ -285,6 +339,14 @@ RESET:
 	out TCCR0B, temp1
 	ldi temp1, 1<<TOIE0				; Timer mask for overflow interrupt
 	sts TIMSK0, temp1
+
+	; Prepare timer 1
+	ldi temp1, 0b00000000			; Operation mode: normal
+	sts TCCR1A, temp1
+	ldi temp1, (1 << CS11)			; Prescaling: CLK/8
+	sts TCCR1B, temp1
+	ldi temp1, 1<<TOIE1				; Timer mask for overflow interrupt
+	sts TIMSK1, temp1
 
 	; Prepare Timer 2 and the LED's
 	ldi temp1, 0b00000000			; Operation mode: normal
@@ -369,6 +431,8 @@ RESET:
 	sts stop_at_floor_progress, temp1
 	sts pb0_button_pushed, temp1
 	sts door_state_change_request, temp1
+	sts timer1_TimeCounter, temp1	
+	sts LED_emergency_alarm_output, temp1
 
 	; Clear the floor_array
 	sts floor_array, temp1
@@ -394,6 +458,13 @@ RESET:
 	ldi lift_direction, dir_stop
 	ldi temp1, false
 	sts floor_changed, temp1
+
+	clr temp1					; Disable timer 2's interrupt
+	sts TIMSK2, temp1
+	
+	; Turn on emergency alarm
+	ldi temp1, true
+	sts emergency_alarm, temp1	
 
 	sei
 	rjmp MAIN
@@ -532,6 +603,79 @@ TIMER0_OVERFLOW:
 	out SREG, temp1
 	pop temp2
 	pop temp1
+	reti
+	
+; Blink the strobe LED's 5 times per second when emergency_alarm flag is set
+TIMER1_OVERFLOW:
+	; Prologue - save all registers
+	TIMER1_PROLOGUE:
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	; Check if emergency_alarm flag is set
+	lds temp1, emergency_alarm
+	cpi temp1, true
+
+	; If emergency alarm flag is set, begin timing
+	breq TIMER1_START_TIMING
+
+	; Else not set, make sure strobe LED's are off, and exit
+	ldi temp1, LED_pattern_off
+	sts LED_emergency_alarm_output, temp1
+	out PORTB, temp1
+	rjmp TIMER1_EPILOGUE
+
+	; Else start keeping track of time
+	TIMER1_START_TIMING:
+	; Load TimeCounter, and increment by 1
+	lds temp1, timer1_TimeCounter
+	inc temp1
+
+	;if TimeCounter value is 3, then one-tenth second has occurred (16-bit timer overflows)
+	cpi temp1, tenth_second_overflows_16bit
+	breq TIMER1_TENTH_SECOND_ELAPSED
+
+	; Else one-tenth second has not been elapsed
+	rjmp TIMER1_TENTH_SECOND_NOT_ELAPSED
+
+	; one-tenth second occurred: alternate the LED pattern (ie off = on, off = on)
+	TIMER1_TENTH_SECOND_ELAPSED:
+		
+		lds temp1, LED_emergency_alarm_output
+		cpi temp1, 0
+		breq TIMER1_RESET_LED_ALARM_OUTPUT
+
+		; LED was on - switch it off
+		ldi temp1, 0
+		sts LED_emergency_alarm_output, temp1
+		rjmp TIMER1_END_TENTH_SECOND_ELAPSED
+
+		; LED was off - switch it on
+		TIMER1_RESET_LED_ALARM_OUTPUT:
+			ldi temp1, LED_emergency_alarm_pattern
+			sts LED_emergency_alarm_output, temp1
+
+		TIMER1_END_TENTH_SECOND_ELAPSED:
+			; Display the pattern
+			out PORTB, temp1
+
+			; Reset the timer
+			clr temp1
+			sts timer1_TimeCounter, temp1
+
+			rjmp TIMER1_EPILOGUE
+
+	; else if one second has not elapsed, simply store the incremented
+	; counter for the time into TimeCounter, and end interrupt
+	TIMER1_TENTH_SECOND_NOT_ELAPSED:
+		sts timer1_TimeCounter, temp1
+
+	TIMER1_EPILOGUE:
+	;Restore conflict registers
+	pop temp1
+	out SREG, temp1
+	pop temp1
 	reti			
 
 ; Describe the door state and lift direction using the LED's
@@ -567,7 +711,7 @@ TIMER2_OVERFLOW:
 			; Check for door state
 			LED_DOOR_STATE:
 			cpi door_state, 0
-			breq LED_DOOR_CLOSED			; door is closed
+			breq LED_DOOR_CLOSED		
 			cpi door_state, 1
 			breq LED_DOOR_OPENING
 			cpi door_state, 2
@@ -575,29 +719,30 @@ TIMER2_OVERFLOW:
 			cpi door_state, 3
 			breq LED_DOOR_CLOSING
 
+			; Load the appropriate LED pattern for corresponding door state
 			LED_DOOR_CLOSED:
-				ldi temp2, 0b00001000
+				ldi temp2, LED_door_closed_pattern
 				rjmp LED_LIFT_DIRECTION
 			LED_DOOR_OPENING:
 				lds temp2, LED_door_state_output
-				cpi temp2, 0
+				cpi temp2, LED_pattern_off
 				breq RESET_LED_FOR_DOOR_OPENING
-				ldi temp2, 0
+				ldi temp2, LED_pattern_off
 				rjmp LED_LIFT_DIRECTION
 				RESET_LED_FOR_DOOR_OPENING:	
-					ldi temp2, 0b00000100
+					ldi temp2, LED_door_opening_pattern
 					rjmp LED_LIFT_DIRECTION
 			LED_DOOR_OPENED:
-				ldi temp2, 0b00000100
+				ldi temp2, LED_door_opened_pattern
 				rjmp LED_LIFT_DIRECTION
 			LED_DOOR_CLOSING:	
 				lds temp2, LED_door_state_output
-				cpi temp2, 0
+				cpi temp2, LED_pattern_off
 				breq RESET_LED_FOR_DOOR_CLOSING
-				ldi temp2, 0
+				ldi temp2, LED_pattern_off
 				rjmp LED_LIFT_DIRECTION
 				RESET_LED_FOR_DOOR_CLOSING:	
-					ldi temp2, 0b00001000
+					ldi temp2, LED_door_closing_pattern
 					rjmp LED_LIFT_DIRECTION				
 
 			;check for lift_direction
@@ -854,6 +999,7 @@ TIMER5_OVERFLOW:
 
 ; Main procedure
 MAIN:
+	rjmp HALT
 
 	; Update curr_floor
 	rcall update_curr_floor
@@ -900,12 +1046,17 @@ MAIN:
 
 ; DEBUGGING	 - check particular outputs using LED's
 HALT: 
+	lcd_display_emergency_message
 
-	; Disable all interrupts
-	disable_all_interrupts
-
-	ser temp1
+	lds temp1, emergency_flag
 	out PORTC, temp1
+
+	; Start polling for emergency key
+	MAIN_START_POLL_EMERGENCY_KEY:
+
+	rjmp POLL_EMERGENCY_KEY
+
+	MAIN_END_POLL_EMERGENCY_KEY:
 
 	rjmp halt 
 
@@ -1167,6 +1318,89 @@ CONVERT:
 		
 	CONVERT_END:
 		rjmp END_POLL_KEYPRESSES
+
+; Poll the emergency key, ie the '*' symbol 
+; located in column 0, row 3
+POLL_EMERGENCY_KEY:
+	
+	; Prepare column start and end points
+	ldi colmask, EMERGCOLMASK
+	
+	; set the location of the emergency key
+	ldi col, emergency_key_col
+
+	CHECK_EMERGENCY_COLUMN:
+	; else scan the column
+	sts PORTL, colmask 
+	lds temp1, PINL				; Read PORT A			
+	andi temp1, OUTPUTMASK		; Get keypad output value
+	cpi temp1, 0xF				; check if any row is high (ie nothing is pressed)
+
+	; if something is pressed, check the row
+	brne CHECK_EMERGENCY_ROW
+
+	; Else reset oldCol and oldRow
+	ldi temp1, 9
+	sts oldCol, temp1
+	sts oldRow, temp1
+	rjmp END_POLL_EMERGENCY_KEY
+
+	CHECK_EMERGENCY_ROW:
+	; Prepare row start and end points
+	ldi rowmask, EMERGROWMASK
+	ldi row, emergency_key_row
+
+	; Scan the row
+	mov temp2, temp1
+	and temp2, rowmask		; Check the unmasked bit
+	
+	; if the bit is clear, something has been pressed.
+	; Check if key pressed is the same as previous key (debouncing)
+	breq CHECK_EMERGENCY_KEY_PRESSED
+
+	; else exit
+	rjmp END_POLL_EMERGENCY_KEY
+
+	CHECK_EMERGENCY_KEY_PRESSED:
+
+	; Check whether the column and rows are the same
+	lds temp1, oldCol
+	lds temp2, oldRow
+	cp temp1, col
+	cpc temp2, row
+
+	; if the same, exit
+	breq END_POLL_EMERGENCY_KEY
+
+	; else emergency key confirmed to have been pressed - proceed to execute the process
+	sts oldCol, col
+	sts oldRow, row
+	rjmp PROCESS_EMERGENCY_KEY
+	
+	END_POLL_EMERGENCY_KEY:
+	; Return to main when poll keypress procedure completed
+	rjmp MAIN_END_POLL_EMERGENCY_KEY
+
+; Sets a request for emergency mode, or cancels it
+PROCESS_EMERGENCY_KEY:
+	; Check if emergency flag is already set
+	lds temp1, emergency_flag
+	cpi temp1, true
+
+	; If already set, then clear the request
+	breq EXIT_EMERGENCY_MODE
+
+	; Else make a request for emergency mode
+	ldi temp1, true
+	sts emergency_flag, temp1
+	sts emergency_alarm, temp1
+	rjmp END_POLL_EMERGENCY_KEY
+
+	EXIT_EMERGENCY_MODE:
+	ldi temp1, false
+	sts emergency_flag, temp1
+	sts emergency_alarm, temp1
+	rjmp END_POLL_EMERGENCY_KEY
 
 ;Delay by subtracting a pair of values until they are 0
 ; uses the values preloaded in value_low, and value_high
