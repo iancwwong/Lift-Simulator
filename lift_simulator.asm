@@ -70,8 +70,44 @@
 	add current_floor, lift_direction
 .endmacro
 
+; Clears the LCD
+.macro reset_lcd_display
+	do_lcd_command 0, 0b00111000 ; 2x5x7
+	rcall sleep_5ms
+	do_lcd_command 0, 0b00111000 ; 2x5x7
+	rcall sleep_1ms
+	do_lcd_command 0, 0b00111000 ; 2x5x7
+	do_lcd_command 0, 0b00111000 ; 2x5x7
+	do_lcd_command 0, 0b00001000 ; display off?
+	do_lcd_command 0, 0b00000001 ; clear display
+	do_lcd_command 0, 0b00000110 ; increment, no display shift
+	do_lcd_command 0, 0b00001100 ; Disply on, Cursor off, blink off
+.endmacro
+
+; Displays the current floor on the LCD using the format:
+; CURRENT FLOOR:
+; [current_floor]
 .macro lcd_display_current_floor
+
+	; Display initial message
+	do_lcd_command 0, 0b10000000	; set cursor to 1st position on top line
+	do_lcd_data 0, 'C'
+	do_lcd_data 0, 'U'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, 'E'
+	do_lcd_data 0, 'N'
+	do_lcd_data 0, 'T'
+	do_lcd_data 0, ' '
+	do_lcd_data 0, 'F'
+	do_lcd_data 0, 'L'
+	do_lcd_data 0, 'O'
+	do_lcd_data 0, 'O'
+	do_lcd_data 0, 'R'
+	do_lcd_data 0, ':'
 	do_lcd_command 0, 0b10101000 	; set cursor to 1st position on bottom line
+
+	; Display the current floor number in ascii
 	mov temp1, current_floor
 	subi temp1, -'0'
 	do_lcd_data 1, 'r'
@@ -313,33 +349,7 @@ RESET:
 	out PORTE, temp1 			 ;Turn on backlight (through pin PE5 on Port E)
 
 	; Reset the LCD display
-	do_lcd_command 0, 0b00111000 ; 2x5x7
-	rcall sleep_5ms
-	do_lcd_command 0, 0b00111000 ; 2x5x7
-	rcall sleep_1ms
-	do_lcd_command 0, 0b00111000 ; 2x5x7
-	do_lcd_command 0, 0b00111000 ; 2x5x7
-	do_lcd_command 0, 0b00001000 ; display off?
-	do_lcd_command 0, 0b00000001 ; clear display
-	do_lcd_command 0, 0b00000110 ; increment, no display shift
-	do_lcd_command 0, 0b00001100 ; Disply on, Cursor off, blink off
-	
-	; Display initial message
-	do_lcd_command 0, 0b10000000	; set cursor to 1st position on top line
-	do_lcd_data 0, 'C'
-	do_lcd_data 0, 'U'
-	do_lcd_data 0, 'R'
-	do_lcd_data 0, 'R'
-	do_lcd_data 0, 'E'
-	do_lcd_data 0, 'N'
-	do_lcd_data 0, 'T'
-	do_lcd_data 0, ' '
-	do_lcd_data 0, 'F'
-	do_lcd_data 0, 'L'
-	do_lcd_data 0, 'O'
-	do_lcd_data 0, 'O'
-	do_lcd_data 0, 'R'
-	do_lcd_data 0, ':'
+	reset_lcd_display
 
 	; Clear all variables
 	clr lift_direction
@@ -687,11 +697,12 @@ TIMER4_OVERFLOW:
 
 		QUICK_CLOSE_DOOR:
 			; Check whether the door is opening
-			; ie progress < start + opening_duration
+			; ie progress <= start + opening_duration
 			lds temp1, stop_at_floor_progress
 			cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration
 
 			; If so, continue on with tracking the time/progress
+			breq TIMER4_TRACK_TIME
 			brlt TIMER4_TRACK_TIME
 
 			; Check whether the door is closing
@@ -711,12 +722,15 @@ TIMER4_OVERFLOW:
 				sts door_state_change_request, temp1
 
 				; Change progress to the point where door should start closing
-				ldi temp1, stop_at_floor_total_duration - stop_at_floor_closing_duration
+				ldi temp1, stop_at_floor_total_duration
 				sts stop_at_floor_progress, temp1
 
 				; Reset timeCounter
 				clr temp1
 				sts timer4_TimeCounter, temp1
+
+				; Set the door to be closing
+				ldi door_state, door_closing
 
 				; End interrupt
 				rjmp TIMER4_EPILOGUE
