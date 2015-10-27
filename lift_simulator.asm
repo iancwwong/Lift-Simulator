@@ -3,6 +3,10 @@
 
 ; DEFINES #########################################################
 
+; For function calls
+.def return_register = r0
+.def parameter_register = r8
+
 .def current_floor = r16
 .def final_dest = r17
 .def lift_direction = r18
@@ -17,13 +21,17 @@
 ; CONSTANTS #######################################################
 
 ; Starting floor number
-.equ starting_floor = 0
+.equ starting_floor = 5
 
 ; Emergency floor number
-.equ emergency_floor = 9
+.equ emergency_floor = 0
 
 ; No final destination is set
 .equ no_final_dest = -1
+.equ undefined_floor = -1		;for undefined contexts
+
+; Maximum number of floors that can be queued up
+.equ queue_size = 10
 
 ; Describe lift direction
 .equ dir_up = 1
@@ -83,7 +91,7 @@
 
 ; Special keypad mask initialisation for emergency key
 .equ EMERGCOLMASK = 0xEF		; leftmost column
-.equ EMERGROWMASK = 0x08		; lowest row
+.equ EMERGROWMASK = 0x08		; lowest row			
 
 ; Boolean values
 .equ true = 1
@@ -253,9 +261,17 @@
 
 ; DATA SEGMENT ####################################################
 .dseg
-	
-	floor_array: .byte 10					; Array of flags to keep track of which floors are requested to be visited
-	floor_changed: .byte 1					; Flag used to indicate the floor level has changed
+
+	; Array of flags used to keep track of whih floors are requested to be visited	
+	floor_array: .byte 10	
+
+	; Floor queue
+	floor_queue: .byte queue_size	; Will be a wrap-around type of queue
+	queue_start: .byte 1			; Where the queue begins
+	queue_end: .byte 1				; Where the queue ends
+
+	; Flag used to indicate the floor level has changed
+	floor_changed: .byte 1					
 
 	; Used for a "Stop at floor" request
 	stop_at_floor: .byte 1			; flag used to indicate a "stop at current floor" request
@@ -270,6 +286,7 @@
 	; Emergency mode variables
 	emergency_flag: .byte 1					; Indicate whether emergency mode was requested
 	emergency_alarm: .byte 1				; Inidicate whether emergency alarm is triggered
+	final_dest_pushed: .byte 1				; Indicate whether a destination floor was preserved prior to going to emergency floor
 
 	; LED patterns that are outputted
 	LED_lift_direction_output: .byte 1		; lift direction component
@@ -440,7 +457,8 @@ RESET:
 	sts timer1_TimeCounter, temp1	
 	sts LED_emergency_alarm_output, temp1
 
-	; Clear the floor_array
+	; initialise floor array
+	clr temp1
 	sts floor_array, temp1
 	sts floor_array+1, temp1
 	sts floor_array+2, temp1
@@ -451,6 +469,24 @@ RESET:
 	sts floor_array+7, temp1
 	sts floor_array+8, temp1
 	sts floor_array+9, temp1
+
+	; initialise floor queue
+	ldi temp1, undefined_floor
+	sts floor_queue, temp1
+	sts floor_queue+1, temp1
+	sts floor_queue+2, temp1
+	sts floor_queue+3, temp1
+	sts floor_queue+4, temp1
+	sts floor_queue+5, temp1
+	sts floor_queue+6, temp1
+	sts floor_queue+7, temp1
+	sts floor_queue+8, temp1
+	sts floor_queue+9, temp1
+
+	; Initialise start and end points for floor queue
+	ldi temp1, 0
+	sts queue_start, temp1
+	sts queue_end, temp1
 
 	; Initialise both oldCol and oldRow to be some number greater than 3
 	ldi temp1, 9
@@ -468,14 +504,7 @@ RESET:
 	sts stop_at_floor, temp1				; No stop_at_floor
 	sts emergency_flag, temp1				; No emergency_mode
 	sts emergency_alarm, temp1				; No emergency_alarm
-
-	; DEBUGGING - Initilisation of variables to test functionality
-	ldi door_state, door_closed
-	ldi current_floor, 6
-
-	; Turn on emergency mode
-	ldi temp1, true
-	sts emergency_flag, temp1
+	sts final_dest_pushed, temp1			; No final_dest was preserved
 
 	sei
 	rjmp MAIN
@@ -1020,35 +1049,90 @@ MAIN:
 	rjmp EMERGENCY_MODE
 
 NORMAL_MODE:
-	; DEBUGGING
-	;rjmp HALT
 
-	; Update curr_floor
-	rcall update_curr_floor
+	; Update curr_floor and display it on LCD
+	UPDATE_AND_DISPLAY_CURRENT_FLOOR:
+		rcall update_curr_floor
+		lcd_display_current_floor
 
-	; Display current floor on LCD
-	lcd_display_current_floor
+	; Check whether to stop at current floor
+	CHECK_TO_STOP_AT_FLOOR:
 
-	; Check if arrived at destination floor
-	cp current_floor, final_dest
+		; Check whether floor_array[currr_floor] == true
+		mov parameter_register, current_floor
+		rcall check_floor_array
+		mov temp1, r0			
+		cpi temp1, true
 
-	; If arrived, stop lift
-	breq STOP_LIFT
+		; A request was made to stop at current floor
+		breq STOP_AT_CURRENT_FLOOR
 
-	; Else proceed
-	rjmp START_POLL_KEYPRESSES
+		; Else proceed
+		rjmp CURR_FLOOR_VISITED
 
-	STOP_LIFT:
-		; Stop the lift
-		ldi lift_direction, dir_stop
+		; Carry out the "stop at floor" procedure
+		STOP_AT_CURRENT_FLOOR:	
+			disable_all_interrupts
+			ldi temp1, true
+			sts stop_at_floor, temp1
+			ldi lift_direction, dir_stop
+			sei
+			rcall complete_stop_at_floor
 
-		; request for a "stop at floor" procedure
-		ldi temp1, true
-		sts stop_at_floor, temp1	
-		
-		; Clear final_dest
-		ldi final_dest, no_final_dest		
+	; Set floor_array[current_floor] to be false, indicating we've visited the floor
+	CURR_FLOOR_VISITED:
+		mov parameter_register, current_floor
+		rcall set_floor_false
 
+	; Check whether final destination has been reached
+	CHECK_FINAL_DEST_ARRIVED:
+		cp current_floor, final_dest
+
+		; If equal, final destination has been reached
+		breq FINAL_DEST_REACHED
+
+		; Else check final_destination
+		rjmp UPDATE_FINAL_DESTINATION
+
+		; Clear final destination, and stop the lift
+		FINAL_DEST_REACHED:
+			ldi final_dest, no_final_dest
+			ldi lift_direction, dir_stop
+
+	; Check whether final destination needs to be updated
+	UPDATE_FINAL_DESTINATION:
+		cpi final_dest, no_final_dest
+
+		; If final dest not set, update from queue
+		breq UPDATE_FROM_QUEUE
+			
+		; Else proceed with journey (since final_dest is set and not reached)
+		rjmp PROCEED_WITH_JOURNEY
+
+		UPDATE_FROM_QUEUE:
+			rcall update_queue
+			
+			; Check whether final_dest is still not set
+			cpi final_dest, no_final_dest
+
+			; If set, then set the direction
+			brne SET_NEW_DIRECTION
+
+			; Else proceed
+			rjmp START_POLL_KEYPRESSES
+
+			SET_NEW_DIRECTION:
+				disable_all_interrupts
+				rcall set_lift_direction
+				sei
+				rjmp START_POLL_KEYPRESSES
+
+		; At this point, final_dest is set but not yet reached
+		PROCEED_WITH_JOURNEY:
+			disable_all_interrupts
+			rcall set_lift_direction
+			sei
+			
 	; Poll Keypresses
 	START_POLL_KEYPRESSES:
 
@@ -1074,12 +1158,26 @@ EMERGENCY_MODE:
 		cpi temp1, true
 
 		; if not set, then proceed to going to emergency floor
-		brne SET_EMERGENCY_FLOOR
+		brne PRESERVE_DESTINATION_FLOOR
 
 		; else request a door_close, and complete the "stop at floor" procedure
 		ldi temp1, door_close_request
 		sts door_state_change_request, temp1
 		rcall complete_stop_at_floor
+
+	; If final_dest is currently set, preserve in memory
+	PRESERVE_DESTINATION_FLOOR:
+		cpi final_dest, no_final_dest
+	
+		; If final_dest is not set, then proceed to set emergency floor
+		breq SET_EMERGENCY_FLOOR
+
+		; Else preserve the destination floor
+		push final_dest
+		
+		; Set the flag indicating that a destination floor has been preserved
+		ldi temp1, true
+		sts final_dest_pushed, temp1
 
 	; Prepare emergency_floor as final destination, and wait until emergency_floor is reached
 	SET_EMERGENCY_FLOOR:
@@ -1142,6 +1240,24 @@ EMERGENCY_MODE:
 
 	; Resume normal operation of the lift
 	RESUME_NORMAL_MODE:
+		; Check whether a final_dest has been preserved prior to entering emergency mode
+		lds temp1, final_dest_pushed
+		cpi temp1, true
+
+		; If a final dest was preserved, then restore it
+		breq RESTORE_FINAL_DEST
+
+		; Else proceed 
+		rjmp NORMAL_MODE_PREP
+
+		RESTORE_FINAL_DEST:
+			pop final_dest
+			
+			; Reset the flag
+			ldi temp1, false
+			sts final_dest_pushed, temp1
+
+		NORMAL_MODE_PREP:
 		; Turn off emergency_alarm
 		ldi temp1, false
 		sts emergency_alarm, temp1
@@ -1352,35 +1468,34 @@ CONVERT:
 		add temp1, col
 		inc temp1
 
-		; DEBUGGING - set the value pressed as final destination
-		; and trigger the lift to move towards it
+		; Check whether floor is requested to be visited
+		mov parameter_register, temp1
+		rcall check_floor_array
+		mov temp2, return_register
+		cpi temp2, true
 
-		; Set the floor as final dest
-		mov final_dest, temp1
+		; If not set, then set the floor, and add it to array
+		brne QUEUE_REQUESTED_FLOOR
 
-		; Set the direction
-		rcall set_lift_direction
-
-		; Check the corresponding floor in the floor_array
-		ldi XH, high(floor_array)
-		ldi XL, low(floor_array)
-		add XL, temp1
-		ldi temp1, 0
-		adc XH, temp1
-		ld temp1, X
-		cpi temp1, 0
-		brne CLEAR_FLOORN_IN_ARRAY
-
-		; Set the floor
-		ldi temp1, true
-		st X, temp1
+		; Else ignore the request
 		rjmp CONVERT_END
 
-		CLEAR_FLOORN_IN_ARRAY:				; DEBUGGING: clears the specified floor when the key is pressed again
-			ldi temp1, false
-			st X, temp1	
+		QUEUE_REQUESTED_FLOOR:
+			; Add the floor to queue
+			mov parameter_register, temp1
+			rcall add_to_queue
 
-		rjmp CONVERT_END
+			; Prepare pointer to corresponding floor in array
+			ldi XH, high(floor_array)
+			ldi XL, low(floor_array)
+			add XL, temp1
+			ldi temp1, 0
+			adc XH, temp1
+
+			; Set the floor in floor_array
+			ldi temp1, true
+			st X, temp1
+			rjmp CONVERT_END
 
 	LETTER_conv:
 		rjmp CONVERT_END
@@ -1409,37 +1524,26 @@ CONVERT:
 
 		; Floor pressed is 0 - set in floor_array
 		ZERO:
+			; Check whether floor is requested to be visited
+			lds temp2, floor_array
+			cpi temp2, true
 
-			; DEBUGGING - set the value pressed as final destination
-			; and trigger the lift to move towards it
+			; If not set, then set the floor, and add it to array
+			brne QUEUE_REQUESTED_FLOOR0
 
-			; Set the floor as final dest
-			ldi final_dest, 0
+			; Else ignore the request
+			rjmp CONVERT_END
 
-			; Set the lift direction
-			DETERMINE_DIRECTION_0:
-			cp final_dest, current_floor
-			brlo SET_DIR_DOWN_0
-			rjmp SET_DIR_STOP_0		;at this point, we have to be at floor 0
-
-				SET_DIR_DOWN_0:
-				ldi lift_direction, dir_down
-				rjmp END_DETERMINE_DIRECTION_0
-
-				SET_DIR_STOP_0:
-				ldi lift_direction, dir_stop
-		
-			END_DETERMINE_DIRECTION_0:
-
-			lds temp1, floor_array
-			cpi temp1, 0
-			brne CLEAR_FLOOR0_IN_ARRAY
-				ldi temp1, 1
-				sts floor_array, temp1
-				rjmp CONVERT_END
-			CLEAR_FLOOR0_IN_ARRAY:
+			QUEUE_REQUESTED_FLOOR0:
+				; Add floor0 to queue
 				ldi temp1, 0
-				sts floor_array, temp1			
+				mov parameter_register, temp1
+				rcall add_to_queue
+
+				; Set the floor in floor_array
+				ldi temp1, true
+				sts floor_array, temp1
+				rjmp CONVERT_END			
 		
 	CONVERT_END:
 		rjmp END_POLL_KEYPRESSES
@@ -1541,6 +1645,230 @@ delay:
 	cpi temp2, 0
 	brne DELAY_LOOP
 	ret
+
+; Refreshes the floor queue by constantly removing the first item and validating it,
+; and sets final_dest to the first valid item (or undefined if queue is empty)
+update_queue:
+	push temp1
+	push temp2
+
+	UPDATE_QUEUE_LOOP:
+	; Obtain the first item through r0
+	rcall remove_queue_head	
+	
+	; Check if item was valid
+	mov temp2, return_register
+	cpi temp2, undefined_floor
+	
+	; If not undefined, then check whether the floor can be a new final dest
+	brne CHECK_FOR_NEW_DEST
+
+	; Else queue must have been empty
+	rjmp QUEUE_WAS_EMPTY
+	
+	CHECK_FOR_NEW_DEST:
+		; Preserve the floor removed
+		push return_register
+
+		; Check whether corersponding floor in floor_array was set to true (ie requested to be visited)
+		mov parameter_register, return_register				; Prepare designated registers
+		rcall check_floor_array
+		mov temp1, return_register					; temp1 contains the boolean value of floor_array[floor_num] == true
+		cpi temp1, true
+
+		; If true, a new final destination can be set
+		breq SET_NEW_FINAL_DEST
+
+		; Else go back to updating the queue 
+		rjmp UPDATE_QUEUE_LOOP
+
+		SET_NEW_FINAL_DEST:
+			pop return_register
+			mov final_dest, return_register
+			rjmp END_UPDATE_QUEUE 
+	
+	QUEUE_WAS_EMPTY:
+	; Set final_dest to be undefined
+	ldi final_dest, undefined_floor
+
+	END_UPDATE_QUEUE:
+	pop temp2
+	pop temp1
+	ret
+
+; ARRAY RELATED FUNCTIONS
+
+; Check whether the floor value in r8 is set to true in floor_array
+; ie floor_array[r8] == true
+; Return the boolean value through r0
+check_floor_array:
+	push XL
+	push XH
+	push temp1
+
+	mov temp1, parameter_register
+	; Determine the address of the array to check (in cseg) - addres stored into X
+	ldi XH, high(floor_array)
+	ldi XL, low(floor_array)
+	add XL, temp1
+	ldi temp1, 0 
+	adc XH, temp1
+	ld temp1, X
+	cpi temp1, false
+
+	; Return the value as parameter
+	mov return_register, temp1
+	
+	END_CHECK_FLOOR_ARRAY:
+	pop temp1
+	pop XH
+	pop XL
+	ret
+
+; Set the index of the floor value in r8 of the floor array to be false
+set_floor_false:
+	push XL
+	push XH
+	push temp1
+
+	; Determine the address of the array element to set false
+	mov temp1, parameter_register		
+	ldi XL, low(floor_array)
+	ldi XH, high(floor_array)
+	add XL, temp1
+	ldi temp1, 0
+	adc XH, temp1					; X now contains the address of the one to set false
+	
+	; Set false
+	ldi temp1, false
+	st X, temp1
+
+	END_SET_FLOOR_FALSE:
+	pop temp1
+	pop XH
+	pop XL
+	ret
+
+; QUEUE RELATED FUNCTIONS
+
+; Adds value stored in r8 to the queue
+add_to_queue:
+	; Save conflict registers
+	push XL
+	push XH
+	push temp1
+
+	; Determine where to add item (ie load the address of queue end point into X)
+	ldi XL, low(floor_queue)
+	ldi XH, high(floor_queue)
+	lds temp1, queue_end
+	add XL, temp1
+	clr temp1
+	adc XH, temp1			; X now contains the address of where to insert element in queue
+	
+	; Store the floor number
+	st X, parameter_register
+
+	; Increment the end_point
+	rcall increment_queue_end
+
+	END_ADD_TO_QUEUE:
+	pop temp1
+	pop XH
+	pop XL
+	ret
+
+; Remove the first item from floor_queue, and return it through r0
+remove_queue_head:
+	push XL
+	push XH
+	push temp1
+	push r26
+
+	; Obtain the item at queue_start
+	ldi XL, low(floor_queue)
+	ldi XH, high(floor_queue)
+	lds temp1, queue_start
+	add XL, temp1
+	clr temp1
+	adc XH, temp1			; X now contains the address of where to insert element in queue
+	ld temp1, X
+
+	; store item in r0
+	mov return_register, temp1
+
+	; Check if loaded item is undefined
+	cpi temp1, undefined_floor
+
+	; If item is undefined, queue is empty - exit
+	breq END_REMOVE_QUEUE_HEAD
+
+	; Set the data at same address to be undefined
+	ldi temp1, undefined_floor
+	st X, temp1
+
+	; Increment start point
+	rcall increment_queue_start
+
+	END_REMOVE_QUEUE_HEAD:
+	pop r26
+	pop temp1
+	pop XH
+	pop XL
+	ret
+
+; Increments the end-point of the queue
+increment_queue_end:
+	push temp1
+	
+	; Get the new end_point
+	lds temp1, queue_end
+	inc temp1
+
+	; Check if new end point is equal to queue size
+	cpi temp1, queue_size
+
+	; If equal, reset end to 0
+	brge RESET_QUEUE_END
+	
+	; else store end, and end function
+	rjmp END_INCREMENT_QUEUE_END
+
+	RESET_QUEUE_END:
+	ldi temp1, 0
+
+	END_INCREMENT_QUEUE_END:
+	; store the new end point
+	sts queue_end, temp1
+	pop temp1
+	ret
+
+; Increments the start-point of the queue
+increment_queue_start:
+	push temp1
+	
+	; Get the new start point
+	lds temp1, queue_start
+	inc temp1
+
+	; Check if new end point is equal to queue size
+	cpi temp1, queue_size
+
+	; If equal, reset end to 0
+	brge RESET_QUEUE_START
+	
+	; else store end, and end function
+	rjmp END_INCREMENT_QUEUE_START
+
+	RESET_QUEUE_START:
+	ldi temp1, 0
+
+	END_INCREMENT_QUEUE_START:
+	; store the new end point
+	sts queue_start, temp1
+	pop temp1
+	ret
+
 
 ; FUNCTIONS USED FOR THE LCD	##########################################
 ; Some constants
