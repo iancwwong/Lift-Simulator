@@ -21,7 +21,7 @@
 ; CONSTANTS #######################################################
 
 ; Starting floor number
-.equ starting_floor = 5
+.equ starting_floor = 0
 
 ; Emergency floor number
 .equ emergency_floor = 0
@@ -63,6 +63,7 @@
 .equ stop_at_floor_closing_duration = 1
 .equ stop_at_floor_opened_duration = 3
 .equ stop_at_floor_total_duration = 5			; opening_duration + opened_duration + closing_duration
+.equ door_min_opened_duration = 2				; NOTE: Must be less than opened_duration
 
 ; Time keeping values represented by number of overflows
 ; at a timer prescaling of CLK/8
@@ -317,7 +318,10 @@
 
 ; Interrupt procedure when PB0 button was pushed
 .org INT0addr
-	jmp EXT_INT0
+	rjmp EXT_INT0
+
+.org INT1addr
+	rjmp EXT_INT1
 
 ; Timer0 overflow interrupt procedure
 .org OVF0addr
@@ -348,11 +352,13 @@ RESET:
 	ldi temp1, low(RAMEND)
 	out SPL, temp1
 
-	; Prepare PB0 as an interrupt
-	ldi temp1, (2 << ISC00)
+	; Prepare push buttons as interrupts
+	ldi temp1, (2 << ISC00)			; falling edge as interrupt for PB0	
+	ori temp1, (0 << ISC10)			; low signal as interrupt for PB1
 	sts EICRA, temp1
 	in temp1, EIMSK					; Enable the push button interrupts
 	ori temp1, (1 << INT0)
+	ori temp1, (1 << INT1)
 	out EIMSK, temp1
 
 	; Prepare timer 0
@@ -506,6 +512,16 @@ RESET:
 	sts emergency_alarm, temp1				; No emergency_alarm
 	sts final_dest_pushed, temp1			; No final_dest was preserved
 
+	; DEBUGGING
+	; Request to be visited
+	;ldi temp1, true
+	;sts floor_array+5, temp1
+
+	; add floor 5 to queue
+	;ldi temp1, 5
+	;mov parameter_register, temp1
+	;rcall add_to_queue
+
 	sei
 	rjmp MAIN
 
@@ -573,7 +589,88 @@ EXT_INT0:
 	pop temp1
 	pop temp2
 	pop r26
+	reti
 
+; PB1 button was pressed - request to open door
+; during "stop at floor" procedure
+EXT_INT1:
+	; save all conflict registers
+	push r26
+	push temp2
+	push temp1
+	in temp1, SREG
+	push temp1
+
+	; check if pb_1 button was pushed
+	lds temp1, pb1_button_pushed
+	cpi temp1, false
+
+	; if false, then go to PROCEED
+	breq PB1_proceed
+
+	; else clear pb0_button_pushed, and exit
+	ldi temp1, false
+	sts pb1_button_pushed,temp1
+	rjmp EXT_INT1_end
+
+	; set pb0 to be pushed
+	PB1_proceed:
+	ldi temp1, true
+	sts pb1_button_pushed, temp1
+
+	; check if button was pressed
+	ldi temp2, 0b10000000
+	in temp1, PIND7					;read the output from PIND (where the push button sends its data)
+	and temp1, temp2
+	cpi temp1, 0
+	breq EXT_INT1_end				;button was not pressed - a 0 signal was found
+
+	; if button was pressed / 1 signal detected: wait
+	ldi r26, 10
+	DEBOUNCE_DELAY low(60000), high(60000), r26
+
+	; check again if button really was pressed
+	ldi temp2, 0b10000000
+	in temp1, PIND7
+	and temp1, temp2
+	cpi temp1, 0
+	breq EXT_INT1_END
+	
+	; Check whether the lift is in motion
+	cpi lift_direction, dir_stop
+
+	; If not in motion, then go to stop_at_floor check
+	breq INT1_CHECK_STOP_AT_FLOOR
+
+	; Else ignore the request
+	rjmp EXT_INT1_END
+
+	INT1_CHECK_STOP_AT_FLOOR:
+		; Check whether there is a "stop at floor" request
+		lds temp1, stop_at_floor
+		cpi temp1, true
+
+		; if there is, then request door to be opened
+		breq INT1_REQUEST_DOOR_OPEN
+
+		; else set a "stop at floor" request, and exit
+		ldi temp1, true
+		sts stop_at_floor, temp1
+		rjmp EXT_INT1_END
+
+		INT1_REQUEST_DOOR_OPEN:
+
+			; Set a request to open doors
+			ldi temp1, door_open_request
+			sts door_state_change_request, temp1
+
+	; restore all the registers
+	EXT_INT1_END:
+	pop temp1
+	out SREG, temp1
+	pop temp1
+	pop temp2
+	pop r26
 	reti
 
 ; Control the movement of the lift
@@ -852,6 +949,7 @@ TIMER4_OVERFLOW:
 	push temp1
 	in temp1, SREG
 	push temp1
+	push temp2
 
 	; Interrupt body
 	; Check if there is a "stop at floor" request
@@ -875,6 +973,11 @@ TIMER4_OVERFLOW:
 		; If there is a request to close the door, execute the quick-close procedure
 		; NOTE: the door will ONLY quick-close if the door is opened
 		breq QUICK_CLOSE_DOOR
+
+		; If there is a request to open the door, execute the open-door procedure
+		; NOTE: door will only open when lift is stopped, or door is closing
+		cpi temp1, door_open_request
+		breq QUICK_OPEN_DOOR
 
 		; Else continue with tracking the time 
 		rjmp TIMER4_TRACK_TIME
@@ -920,6 +1023,71 @@ TIMER4_OVERFLOW:
 				rjmp TIMER4_EPILOGUE
 
 			DOOR_ALREADY_CLOSING:
+				ldi temp1, door_no_request
+				sts door_state_change_request, temp1
+				rjmp TIMER4_TRACK_TIME
+
+		QUICK_OPEN_DOOR:
+			; Check whether the door is opening
+			; ie progress <= start + opening_duration
+			lds temp1, stop_at_floor_progress
+			cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration
+
+			; If so, clear the request (since door is already opening)
+			breq DOOR_ALREADY_OPENING
+			brlt DOOR_ALREADY_OPENING
+
+			; Check whether door is closing
+			; ie progress = total_duration - closing_duration
+			cpi temp1, stop_at_floor_total_duration - stop_at_floor_closing_duration
+			
+			; If door is closing, then accept the request and perform quick-open
+			brge QUICK_OPEN
+
+			; Else door must be kept open
+			EXTEND_OPEN_DURATION:
+				; Accept the open request ONLY when door is opened already for minimum_opening duration
+				cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration + door_min_opened_duration
+
+				; If door has been opened for minimum amount of time, then accept the open request
+				brge EXTEND_OPEN_ACCEPT_REQUEST
+
+				; Else clear and ignore it
+				ldi temp1, door_no_request
+				sts door_state_change_request, temp1
+				rjmp TIMER4_TRACK_TIME
+
+				EXTEND_OPEN_ACCEPT_REQUEST:
+					; Set the progress back to minimum opened duration
+					ldi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration + door_min_opened_duration
+					sts stop_at_floor_progress, temp1
+					
+					; Clear the request
+					ldi temp1, door_no_request
+					sts door_state_change_request, temp1
+					rjmp TIMER4_TRACK_TIME
+
+			QUICK_OPEN:
+				; Determine the amount of time to open the door, depending on how much the door has closed
+				lds temp1, timer4_TimeCounter
+				ldi temp2, one_second_overflows_16bit
+				sub temp2, temp1
+
+				; Store starting time value into TimeCounter
+				sts timer4_TimeCounter, temp2
+				
+				; Set the progress to opening door
+				ldi temp1, stop_at_floor_progress_start
+				sts stop_at_floor_progress, temp1
+
+				; Clear the request
+				ldi temp1, door_no_request
+				sts door_state_change_request, temp1
+				
+				rjmp TIMER4_TRACK_TIME
+
+			DOOR_ALREADY_OPENING:
+				; Clear the request
 				ldi temp1, door_no_request
 				sts door_state_change_request, temp1
 
@@ -974,7 +1142,6 @@ TIMER4_OVERFLOW:
 				ldi door_state, door_closed
 				rjmp TIMER4_END_ONE_SECOND_ELAPSED
 
-
 			TIMER4_END_ONE_SECOND_ELAPSED:
 				; Increment the stop_at_floor progress, and store it back
 				lds temp1, stop_at_floor_progress
@@ -994,6 +1161,7 @@ TIMER4_OVERFLOW:
 
 	TIMER4_EPILOGUE:
 	;Restore conflict registers
+	pop temp2
 	pop temp1
 	out SREG, temp1
 	pop temp1
@@ -1049,7 +1217,6 @@ MAIN:
 	rjmp EMERGENCY_MODE
 
 NORMAL_MODE:
-
 	; Update curr_floor and display it on LCD
 	UPDATE_AND_DISPLAY_CURRENT_FLOOR:
 		rcall update_curr_floor
@@ -1058,10 +1225,10 @@ NORMAL_MODE:
 	; Check whether to stop at current floor
 	CHECK_TO_STOP_AT_FLOOR:
 
-		; Check whether floor_array[currr_floor] == true
+		; Check whether floor_array[curr_floor] == true
 		mov parameter_register, current_floor
 		rcall check_floor_array
-		mov temp1, r0			
+		mov temp1, return_register
 		cpi temp1, true
 
 		; A request was made to stop at current floor
@@ -1071,13 +1238,15 @@ NORMAL_MODE:
 		rjmp CURR_FLOOR_VISITED
 
 		; Carry out the "stop at floor" procedure
-		STOP_AT_CURRENT_FLOOR:	
+		STOP_AT_CURRENT_FLOOR:
+			
 			disable_all_interrupts
 			ldi temp1, true
 			sts stop_at_floor, temp1
 			ldi lift_direction, dir_stop
 			sei
 			rcall complete_stop_at_floor
+			
 
 	; Set floor_array[current_floor] to be false, indicating we've visited the floor
 	CURR_FLOOR_VISITED:
@@ -1110,8 +1279,9 @@ NORMAL_MODE:
 		rjmp PROCEED_WITH_JOURNEY
 
 		UPDATE_FROM_QUEUE:
-			rcall update_queue
 			
+			rcall update_queue
+
 			; Check whether final_dest is still not set
 			cpi final_dest, no_final_dest
 
@@ -1135,7 +1305,6 @@ NORMAL_MODE:
 			
 	; Poll Keypresses
 	START_POLL_KEYPRESSES:
-
 		; Disable all interrupts
 		disable_all_interrupts
 
@@ -1273,6 +1442,9 @@ EMERGENCY_MODE:
 
 ; DEBUGGING	 - check particular outputs using LED's
 HALT: 
+	disable_all_interrupts
+
+	out PORTC, final_dest
 
 	rjmp halt 
 
@@ -1341,7 +1513,7 @@ complete_stop_at_floor:
 	
 	; else end
 	pop temp1
-	reti	
+	ret	
 
 ; Poll the keypad
 POLL_KEYPRESSES:
@@ -1446,6 +1618,7 @@ POLL_KEYPRESSES:
 ; Detect what kind of key was pressed
 ; and carry out appropriate actions
 CONVERT:
+	
 	cpi col, 3
 
 	; If key was in column 3, then a letter was pressed
@@ -1467,6 +1640,9 @@ CONVERT:
 		add temp1, row
 		add temp1, col
 		inc temp1
+
+		cpi final_dest, no_final_dest
+
 
 		; Check whether floor is requested to be visited
 		mov parameter_register, temp1
@@ -1714,7 +1890,6 @@ check_floor_array:
 	ldi temp1, 0 
 	adc XH, temp1
 	ld temp1, X
-	cpi temp1, false
 
 	; Return the value as parameter
 	mov return_register, temp1
