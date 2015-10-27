@@ -702,6 +702,7 @@ TIMER0_OVERFLOW:
 	rjmp TIMER0_EPILOGUE
 
 	TIMER0_SIMULATE_LIFT_MOVEMENT:
+		; Disable 
 
 		; Load TimeCounter, and increment by 1
 		lds temp1, timer0_TimeCounter
@@ -1206,6 +1207,9 @@ TIMER5_OVERFLOW:
 
 ; Main procedure
 MAIN:
+	; Check if push buttons should be enabled, based on whether lift is moving
+	rcall control_push_buttons
+	
 	; Check if emergency flag is set
 	lds temp1, emergency_flag
 	cpi temp1, true
@@ -1449,6 +1453,35 @@ HALT:
 	rjmp halt 
 
 ; GENERAL FUNCTIONS ######################################################
+
+; Determine whether open/close buttons should be enabled or disabled, depending
+; on whether the lift is in motion
+control_push_buttons:
+	push temp1
+
+	; Load mask register
+	in temp1, EIMSK
+
+	; Check the lift motion
+	cpi lift_direction, dir_stop
+
+	; If lift is stopped, then enable both buttons
+	breq ENABLE_OPEN_CLOSE_BUTTONS
+
+	; Else disable both buttons
+	andi temp1, (0 << INT0)
+	andi temp1, (0 << INT1)
+	rjmp END_CONTROL_PUSH_BUTTONS
+
+	ENABLE_OPEN_CLOSE_BUTTONS:
+	ori temp1, (1 << INT0)
+	ori temp1, (1 << INT1)
+
+	END_CONTROL_PUSH_BUTTONS:
+	; Store back into interrupt mask register
+	out EIMSK, temp1
+	pop temp1
+	ret
 
 ; Update the current floor
 update_curr_floor:

@@ -57,13 +57,13 @@ RESET:
 	out DDRC, temp1
 
 	; Set control registers for the external outputs (buttons)
-	ldi temp1, (0 << ISC10)				; low level throws interrupt
-	sts EICRA, temp1
+	;ldi temp1, (0 << ISC10)				; low level throws interrupt
+	;sts EICRA, temp1
 
 	;Enable the push button interrupts
-	in temp1, EIMSK
-	ori temp1, (1 << INT1)
-	out EIMSK, temp1
+	;in temp1, EIMSK
+	;ori temp1, (1 << INT1)
+	;out EIMSK, temp1
 
 	clr temp1
 	sts door_state_change_request, temp1
@@ -115,13 +115,8 @@ EXT_INT1:
 	and temp1, temp2
 	cpi temp1, 0
 	breq EXT_INT1_END
-	
-	; Button is pressed - request to close doors
-	ldi temp1, door_open_request
-	sts door_state_change_request, temp1
 
-	lds temp1, dummy_value
-	inc temp1
+	ldi temp1, 0
 	sts dummy_value, temp1
 
 	; restore all the registers
@@ -138,6 +133,8 @@ EXT_INT1:
 MAIN:
 
 	lds temp1, dummy_value
+	inc temp1
+	sts dummy_value, temp1
 	out PORTC, temp1
 	rjmp MAIN
 
