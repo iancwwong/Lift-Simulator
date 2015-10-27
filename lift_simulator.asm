@@ -1038,15 +1038,18 @@ TIMER4_OVERFLOW:
 			cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration
 
 			; If so, clear the request (since door is already opening)
-			breq DOOR_ALREADY_OPENING
 			brlt DOOR_ALREADY_OPENING
 
 			; Check whether door is closing
 			; ie progress = total_duration - closing_duration
 			cpi temp1, stop_at_floor_total_duration - stop_at_floor_closing_duration
 			
-			; If door is closing, then accept the request and perform quick-open
-			brge QUICK_OPEN
+			; If door is not closing (ie opened), then extend the opening duration
+			breq EXTEND_OPEN_DURATION
+			brlt EXTEND_OPEN_DURATION
+
+			; Else accept request and perform quick_open
+			rjmp QUICK_OPEN
 
 			; Else door must be kept open
 			EXTEND_OPEN_DURATION:
