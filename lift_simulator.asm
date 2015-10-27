@@ -7,6 +7,7 @@
 .def return_register = r0
 .def parameter_register = r8
 
+; Registers containing important variables
 .def current_floor = r16
 .def final_dest = r17
 .def lift_direction = r18
@@ -287,7 +288,7 @@
 	; Emergency mode variables
 	emergency_flag: .byte 1					; Indicate whether emergency mode was requested
 	emergency_alarm: .byte 1				; Inidicate whether emergency alarm is triggered
-	final_dest_pushed: .byte 1				; Indicate whether a destination floor was preserved prior to going to emergency floor
+	final_dest_saved: .byte 1				; Indicate whether a destination floor was preserved prior to going to emergency floor
 
 	; LED patterns that are outputted
 	LED_lift_direction_output: .byte 1		; lift direction component
@@ -510,7 +511,7 @@ RESET:
 	sts stop_at_floor, temp1				; No stop_at_floor
 	sts emergency_flag, temp1				; No emergency_mode
 	sts emergency_alarm, temp1				; No emergency_alarm
-	sts final_dest_pushed, temp1			; No final_dest was preserved
+	sts final_dest_saved, temp1				; No final_dest was preserved
 
 	; DEBUGGING
 	; Request to be visited
@@ -1356,7 +1357,7 @@ EMERGENCY_MODE:
 		
 		; Set the flag indicating that a destination floor has been preserved
 		ldi temp1, true
-		sts final_dest_pushed, temp1
+		sts final_dest_saved, temp1
 
 	; Prepare emergency_floor as final destination, and wait until emergency_floor is reached
 	SET_EMERGENCY_FLOOR:
@@ -1420,7 +1421,7 @@ EMERGENCY_MODE:
 	; Resume normal operation of the lift
 	RESUME_NORMAL_MODE:
 		; Check whether a final_dest has been preserved prior to entering emergency mode
-		lds temp1, final_dest_pushed
+		lds temp1, final_dest_saved
 		cpi temp1, true
 
 		; If a final dest was preserved, then restore it
@@ -1434,7 +1435,7 @@ EMERGENCY_MODE:
 			
 			; Reset the flag
 			ldi temp1, false
-			sts final_dest_pushed, temp1
+			sts final_dest_saved, temp1
 
 		NORMAL_MODE_PREP:
 		; Turn off emergency_alarm
