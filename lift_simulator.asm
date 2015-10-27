@@ -354,7 +354,7 @@ RESET:
 
 	; Prepare push buttons as interrupts
 	ldi temp1, (2 << ISC00)			; falling edge as interrupt for PB0	
-	ori temp1, (0 << ISC10)			; low signal as interrupt for PB1
+	ori temp1, (2 << ISC10)			; falling edge as interrupt for PB1
 	sts EICRA, temp1
 	in temp1, EIMSK					; Enable the push button interrupts
 	ori temp1, (1 << INT0)
@@ -966,6 +966,9 @@ TIMER4_OVERFLOW:
 	; Start tracking the progress and changing the door state.
 	TIMER4_TRACK_PROGRESS:
 
+		; control push buttons
+		rcall control_push_buttons
+
 		; Check for any door change requests
 		; Check for door close request
 		lds temp1, door_state_change_request
@@ -1454,11 +1457,13 @@ HALT:
 
 ; GENERAL FUNCTIONS ######################################################
 
-; Determine whether open/close buttons should be enabled or disabled, depending
-; on whether the lift is in motion
+; Determine whether open/close buttons should be enabled or disabled
+; and also their mode of interrupt trigger in some situations
 control_push_buttons:
 	push temp1
 
+	; Enable/disable the push buttons
+	CHECK_ENABLE_DISABLE:
 	; Load mask register
 	in temp1, EIMSK
 
@@ -1471,15 +1476,38 @@ control_push_buttons:
 	; Else disable both buttons
 	andi temp1, (0 << INT0)
 	andi temp1, (0 << INT1)
-	rjmp END_CONTROL_PUSH_BUTTONS
+	rjmp END_CHECK_ENABLE_DISABLE
 
 	ENABLE_OPEN_CLOSE_BUTTONS:
 	ori temp1, (1 << INT0)
 	ori temp1, (1 << INT1)
 
-	END_CONTROL_PUSH_BUTTONS:
-	; Store back into interrupt mask register
+	END_CHECK_ENABLE_DISABLE:
+	; Store back into interrupt mask register	
 	out EIMSK, temp1
+
+	; Change the interrupt trigger mode for the push buttons
+	CHECK_MODE:
+	; Load control register for external interrupts
+	lds temp1, EICRA
+
+	; Check whether doors are opened
+	cpi door_state, door_opened
+
+	; If doors are opened, set the interrupt trigger for pb1 as low-level
+	breq CAN_HOLD_PB1
+
+	; Else set the mode to falling-edge triggered
+	ori temp1, (2 << ISC10)
+	rjmp END_CHECK_MODE
+
+	CAN_HOLD_PB1:
+	andi temp1, 0b11110011
+
+	END_CHECK_MODE:
+	; Store back into control register
+	sts EICRA, temp1
+
 	pop temp1
 	ret
 
