@@ -1,4 +1,15 @@
-; This is the final project file containing everything
+; ==================================================================================
+; COMP2121 ASSIGNMENT 15S2
+; This program is a lift simulator, which is meant so simulate a basic lift system.
+; Featuers include:
+;	- Being able to travel between 10 floors (0-9)
+;	- Accept multiple requests to visit floors
+;	- Visit floors
+;	- Open / close doors
+;	- Entering emergency mode
+; Written by: Mitchell John & Ian Wong
+; Date started: 20/10/2015
+; ==================================================================================
 .include "m2560def.inc"
 
 ; DEFINES #########################################################
