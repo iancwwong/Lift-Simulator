@@ -1541,9 +1541,9 @@ set_lift_direction:
 	cp final_dest, current_floor
 
 	; If final dest is lower than current floor, direction is down
-	brlo SET_DIR_DOWN
+	brlt SET_DIR_DOWN
 
-	; If final dest is lower than current floor, direction is down
+	; If final dest is equal to current floor, direction is stopped
 	breq SET_DIR_STOP
 
 	; Else direction must be up
