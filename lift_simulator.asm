@@ -362,7 +362,7 @@ RESET:
 	; Prepare timer 0
 	ldi temp1, 0b00000000			; Operation mode: normal
 	out TCCR0A, temp1
-	ldi temp1, 0b00000010			; Prescaling: 00000010
+	ldi temp1, 0b00000010			; Prescaling: CLK/8
 	out TCCR0B, temp1
 	ldi temp1, 1<<TOIE0				; Timer mask for overflow interrupt
 	sts TIMSK0, temp1
@@ -1605,7 +1605,7 @@ POLL_KEYPRESSES:
 		ldi temp2, 0
 		rcall delay
 
-		lds temp1, PINL				; Read PORT A			
+		lds temp1, PINL				; Read PORT L			
 		andi temp1, OUTPUTMASK		; Get keypad output value
 		cpi temp1, 0xF				; check if any row is high (ie nothing is pressed)
 
