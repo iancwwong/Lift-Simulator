@@ -68,7 +68,6 @@
 
 ; Time keeping values represented by number of overflows
 ; at a timer prescaling of CLK/8
-.equ half_second_overflows = 3906
 .equ eighth_second_overflows = 976
 .equ two_second_overflows = 15624
 .equ one_second_overflows_16bit = 30			; NOTE: SPECIFICALLY for a 16-bit timer
@@ -297,11 +296,9 @@
 	
 	; Used to count the number of timer overflows
 	timer0_TimeCounter: .byte 2		
-	timer1_TimeCounter: .byte 1		
+	timer1_TimeCounter: .byte 1
+	timer2_TimeCounter: .byte 2		
 	timer4_TimeCounter: .byte 1
-
-	eighthTimeCounter: .byte 2				; Used to calculate whether 1/8th second has passed
-	halfTimeCounter: .byte 2				; Used to calculate whether 1/2 second has passed
 	
 	; Flags used as a software approach to reading in button presses reliably
 	pb0_button_pushed: .byte 1	
@@ -450,8 +447,7 @@ RESET:
 	clr row
 
 	; Clear all data in dseg
-	clear eighthTimeCounter
-	clear halfTimeCounter
+	clear timer2_TimeCounter
 	clear timer0_TimeCounter
 	clr temp1
 	sts LED_lift_direction_output, temp1
@@ -829,8 +825,8 @@ TIMER2_OVERFLOW:
 
 	; Function body
 		; Load TimeCounter, and increment by 1
-		lds temp1, eighthTimeCounter
-		lds temp2, eighthTimeCounter + 1
+		lds temp1, timer2_TimeCounter
+		lds temp2, timer2_TimeCounter + 1
 		adiw temp2:temp1, 1
 
 		;if TimeCounter value is 976, then 1/8th a second has occurred
@@ -925,14 +921,14 @@ TIMER2_OVERFLOW:
 			sts LED_door_state_output, temp2
 
 			; Reload the timeCounter values, and reset time counter
-			clear eighthTimeCounter
+			clear timer2_TimeCounter
 			rjmp TIMER2_EPILOGUE
 
-		; else if one second has not elapsed, simply store the incremented
+		; else if an eighth second has not elapsed, simply store the incremented
 		; counter for the time into TimeCounter, and end interrupt
 		TIMER2_8th_SECOND_NOT_ELAPSED:
-			sts eighthTimeCounter, temp1
-			sts eighthTimeCounter+1, temp2
+			sts timer2_TimeCounter, temp1
+			sts timer2_TimeCounter+1, temp2
 
 	TIMER2_EPILOGUE:
 		;Restore conflict registers
@@ -1039,6 +1035,7 @@ TIMER4_OVERFLOW:
 			cpi temp1, stop_at_floor_progress_start + stop_at_floor_opening_duration
 
 			; If so, clear the request (since door is already opening)
+			breq DOOR_ALREADY_OPENING
 			brlt DOOR_ALREADY_OPENING
 
 			; Check whether door is closing
