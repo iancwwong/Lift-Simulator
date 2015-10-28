@@ -699,7 +699,6 @@ TIMER0_OVERFLOW:
 	rjmp TIMER0_EPILOGUE
 
 	TIMER0_SIMULATE_LIFT_MOVEMENT:
-		; Disable 
 
 		; Load TimeCounter, and increment by 1
 		lds temp1, timer0_TimeCounter
