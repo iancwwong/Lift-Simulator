@@ -977,6 +977,22 @@ TIMER4_OVERFLOW:
 		; control push buttons
 		rcall control_push_buttons
 
+		; Check whether emergency mode has been entered
+		lds temp1, emergency_flag
+		cpi temp1, true
+
+		; if set, then immediately close doors if opened
+		breq TIMER4_EMERGENCY_CLOSE_DOORS
+
+		; Else proceed to checking for any requests for doors
+		rjmp CHECK_DOOR_STATE_CHANGE_REQUESTS
+
+		TIMER4_EMERGENCY_CLOSE_DOORS:
+			; Set a door-close request
+			ldi temp1, door_close_request
+			sts door_state_change_request, temp1
+
+		CHECK_DOOR_STATE_CHANGE_REQUESTS:
 		; Check for any door change requests
 		; Check for door close request
 		lds temp1, door_state_change_request
@@ -1098,14 +1114,14 @@ TIMER4_OVERFLOW:
 
 				; Clear the request
 				ldi temp1, door_no_request
-				sts door_state_change_request, temp1
-				
+				sts door_state_change_request, temp1		
 				rjmp TIMER4_TRACK_TIME
 
 			DOOR_ALREADY_OPENING:
 				; Clear the request
 				ldi temp1, door_no_request
 				sts door_state_change_request, temp1
+				rjmp TIMER4_TRACK_TIME
 
 		TIMER4_TRACK_TIME:
 		; Load TimeCounter, and increment by 1
@@ -1414,16 +1430,18 @@ EMERGENCY_MODE:
 	; Wait until emergency key is pressed again (ie cancelled)
 	RESET_EMERGENCY_FLAG:
 		; Start polling for emergency key
-		MAIN_START_POLL_EMERGENCY_KEY:
-		rjmp POLL_EMERGENCY_KEY
-		MAIN_END_POLL_EMERGENCY_KEY:
+		rcall poll_emergency_key
 
 		; Check if lift is still in emergency mode
 		lds temp1, emergency_flag
 		cpi temp1, true
 	
 		; If still set, poll again for emergency flag
-		breq MAIN_START_POLL_EMERGENCY_KEY
+		brne RESUME_NORMAL_MODE
+
+		; Else poll again for emergency key
+		rjmp RESET_EMERGENCY_FLAG
+
 
 	; Resume normal operation of the lift
 	RESUME_NORMAL_MODE:
@@ -1588,11 +1606,24 @@ complete_stop_at_floor:
 	push temp1
 	
 	STOP_AT_FLOOR_LOOP:
-		; Read keypresses
+
+		; Check which keypress polling function to call
+		lds temp1, emergency_flag
+		cpi temp1, true
+
+		; If in emergency, do NOT read any keypresses
+		breq STOP_AT_FLOOR_EMERGENCY_MODE
+	
+		; Else read keypresses in normal mode
 		disable_all_interrupts
 		rcall poll_keypresses
 		sei
+		rjmp CHECK_STOP_AT_FLOOR_FLAG
 
+		STOP_AT_FLOOR_EMERGENCY_MODE:
+			; do nothing
+
+		CHECK_STOP_AT_FLOOR_FLAG:
 		; Check whether the stop_at_floor is set
 		lds temp1, stop_at_floor
 		cpi temp1, true
@@ -1791,7 +1822,6 @@ CONVERT:
 
 		; Do nothing
 		HASH:
-			rcall update_queue
 			rjmp CONVERT_END
 
 		; Enable emergency mode
@@ -1828,7 +1858,13 @@ CONVERT:
 
 ; Poll the emergency key, ie the '*' symbol 
 ; located in column 0, row 3 (bottom left of keypad)
-POLL_EMERGENCY_KEY:
+poll_emergency_key:
+	push colmask
+	push col
+	push rowmask
+	push row
+	push temp1
+	push temp2
 	
 	; Prepare column start and end points
 	ldi colmask, EMERGCOLMASK
@@ -1885,8 +1921,14 @@ POLL_EMERGENCY_KEY:
 	rjmp PROCESS_EMERGENCY_KEY
 	
 	END_POLL_EMERGENCY_KEY:
-	; Return to main when poll keypress procedure completed
-	rjmp MAIN_END_POLL_EMERGENCY_KEY
+	; Restore conflict registers
+	pop temp2
+	pop temp1
+	pop row
+	pop rowmask
+	pop col
+	pop colmask
+	ret
 
 ; Sets a request for emergency mode, or cancels it
 PROCESS_EMERGENCY_KEY:
