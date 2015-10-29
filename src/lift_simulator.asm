@@ -1,7 +1,7 @@
 ; ==================================================================================
 ; COMP2121 ASSIGNMENT 15S2
 ; This program is a lift simulator, which is meant so simulate a basic lift system.
-; Featuers include:
+; Features include:
 ;	- Being able to travel between 10 floors (0-9)
 ;	- Accept multiple requests to visit floors
 ;	- Visit floors
@@ -976,21 +976,6 @@ TIMER4_OVERFLOW:
 
 		; control push buttons
 		rcall control_push_buttons
-
-		; Check whether emergency mode has been entered
-		lds temp1, emergency_flag
-		cpi temp1, true
-
-		; if set, then immediately close doors if opened
-		breq TIMER4_EMERGENCY_CLOSE_DOORS
-
-		; Else proceed to checking for any requests for doors
-		rjmp CHECK_DOOR_STATE_CHANGE_REQUESTS
-
-		TIMER4_EMERGENCY_CLOSE_DOORS:
-			; Set a door-close request
-			ldi temp1, door_close_request
-			sts door_state_change_request, temp1
 
 		CHECK_DOOR_STATE_CHANGE_REQUESTS:
 		; Check for any door change requests
