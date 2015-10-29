@@ -1253,7 +1253,7 @@ NORMAL_MODE:
 		; A request was made to stop at current floor
 		breq STOP_AT_CURRENT_FLOOR
 
-		; Else proceed
+		; Else set floor to be visited
 		rjmp CURR_FLOOR_VISITED
 
 		; Carry out the "stop at floor" procedure
@@ -1264,8 +1264,7 @@ NORMAL_MODE:
 			sts stop_at_floor, temp1
 			ldi lift_direction, dir_stop
 			sei
-			rcall complete_stop_at_floor
-			
+			rcall complete_stop_at_floor	
 
 	; Set floor_array[current_floor] to be false, indicating we've visited the floor
 	CURR_FLOOR_VISITED:
@@ -1289,6 +1288,7 @@ NORMAL_MODE:
 
 	; Check whether final destination needs to be updated
 	UPDATE_FINAL_DESTINATION:
+		
 		cpi final_dest, no_final_dest
 
 		; If final dest not set, update from queue
@@ -1308,31 +1308,29 @@ NORMAL_MODE:
 			brne SET_NEW_DIRECTION
 
 			; Else proceed
-			rjmp START_POLL_KEYPRESSES
+			rjmp MAIN_START_POLL_KEYPRESSES
 
 			SET_NEW_DIRECTION:
 				disable_all_interrupts
 				rcall set_lift_direction
 				sei
-				rjmp START_POLL_KEYPRESSES
+				rjmp MAIN_START_POLL_KEYPRESSES
 
 		; At this point, final_dest is set but not yet reached
 		PROCEED_WITH_JOURNEY:
 			disable_all_interrupts
 			rcall set_lift_direction
 			sei
-			
-	; Poll Keypresses
-	START_POLL_KEYPRESSES:
+
+	; Poll the keypresses
+	MAIN_START_POLL_KEYPRESSES:
 		; Disable all interrupts
 		disable_all_interrupts
+				
+		; Poll Keypresses
+		rcall poll_keypresses
 
-		; Poll the keypresses
-		rjmp poll_keypresses
-
-	MAIN_END_POLL_KEYPRESSES:
-	; Re-enable the interrupts
-	sei
+		sei
 
 	; Start main again
 	rjmp MAIN
@@ -1473,14 +1471,9 @@ HALT:
 	mov parameter_register, final_dest
 	rcall set_floor_false
 
-	;START_POLL_KEYPRESSES:
-		; Disable all interrupts
-		disable_all_interrupts
-
-		; Poll the keypresses
-		rjmp poll_keypresses
-
-	;MAIN_END_POLL_KEYPRESSES:
+	disable_all_interrupts
+	rcall poll_keypresses
+	sei
 
 	rjmp HALT
 
@@ -1595,10 +1588,15 @@ complete_stop_at_floor:
 	push temp1
 	
 	STOP_AT_FLOOR_LOOP:
-	; Check whether the stop_at_floor is set
-	lds temp1, stop_at_floor
-	cpi temp1, true
-	
+		; Read keypresses
+		disable_all_interrupts
+		rcall poll_keypresses
+		sei
+
+		; Check whether the stop_at_floor is set
+		lds temp1, stop_at_floor
+		cpi temp1, true
+
 	; If set, then loop back
 	breq STOP_AT_FLOOR_LOOP
 	
@@ -1607,7 +1605,13 @@ complete_stop_at_floor:
 	ret	
 
 ; Poll the keypad
-POLL_KEYPRESSES:
+poll_keypresses:
+	push colmask
+	push col
+	push rowmask
+	push row
+	push temp1
+	push temp2
 	
 	; Prepare column start and end points
 	ldi colmask, INITCOLMASK
@@ -1703,8 +1707,14 @@ POLL_KEYPRESSES:
 			rjmp COLUMN_LOOP
 	
 	END_POLL_KEYPRESSES:
-	; Return to main when poll keypress procedure completed
-	rjmp MAIN_END_POLL_KEYPRESSES
+	; Restore conflict registers
+	pop temp2
+	pop temp1
+	pop row
+	pop rowmask
+	pop col
+	pop colmask
+	ret
 
 ; Detect what kind of key was pressed
 ; and carry out appropriate actions
