@@ -1353,9 +1353,6 @@ EMERGENCY_MODE:
 		sts door_state_change_request, temp1
 		rcall complete_stop_at_floor
 
-	; disable the push buttons
-	rcall control_push_buttons
-
 	; If final_dest is currently set, preserve in memory
 	PRESERVE_DESTINATION_FLOOR:
 		cpi final_dest, no_final_dest
@@ -1387,6 +1384,7 @@ EMERGENCY_MODE:
 		ldi final_dest, emergency_floor					; Set final destination to be emergency floor
 		rcall set_lift_direction						; Set the direction of the lift
 		sei												; Re-enable interrupts
+		rcall control_push_buttons						; Disables the push buttons
 		rjmp SET_EMERGENCY_FLOOR						; Loop back
 		
 	; Carry out "stop at floor" procedure at emergency floor
@@ -1505,6 +1503,7 @@ control_push_buttons:
 	breq ENABLE_OPEN_CLOSE_BUTTONS
 
 	; Else disable both buttons
+	DISABLE_OPEN_CLOSE_BUTTONS:
 	andi temp1, (0 << INT0)
 	andi temp1, (0 << INT1)
 	rjmp END_CHECK_ENABLE_DISABLE
