@@ -532,6 +532,7 @@ RESET:
 
 	sei
 	rjmp MAIN
+	;rjmp HALT
 
 ; PB0 button was pressed - request door to quick-close
 ; during the "stop at floor" procedure
@@ -1352,6 +1353,9 @@ EMERGENCY_MODE:
 		sts door_state_change_request, temp1
 		rcall complete_stop_at_floor
 
+	; disable the push buttons
+	rcall control_push_buttons
+
 	; If final_dest is currently set, preserve in memory
 	PRESERVE_DESTINATION_FLOOR:
 		cpi final_dest, no_final_dest
@@ -1458,13 +1462,29 @@ EMERGENCY_MODE:
 		rjmp MAIN
 
 
-; DEBUGGING	 - check particular outputs using LED's
+; DEBUGGING	 mode
 HALT: 
 	disable_all_interrupts
-
 	out PORTC, final_dest
 
-	rjmp halt 
+	; Check whether final_dest is undefined
+	cpi final_dest, undefined_floor
+	;breq START_POLL_KEYPRESSES
+
+	; Else uncheck it
+	mov parameter_register, final_dest
+	rcall set_floor_false
+
+	;START_POLL_KEYPRESSES:
+		; Disable all interrupts
+		disable_all_interrupts
+
+		; Poll the keypresses
+		rjmp poll_keypresses
+
+	;MAIN_END_POLL_KEYPRESSES:
+
+	rjmp HALT
 
 ; GENERAL FUNCTIONS ######################################################
 
@@ -1762,6 +1782,7 @@ CONVERT:
 
 		; Do nothing
 		HASH:
+			rcall update_queue
 			rjmp CONVERT_END
 
 		; Enable emergency mode
@@ -1927,7 +1948,8 @@ update_queue:
 		; If true, a new final destination can be set
 		breq SET_NEW_FINAL_DEST
 
-		; Else go back to updating the queue 
+		; Else go back to updating the queue
+		pop return_register				; Remove the stored floor 
 		rjmp UPDATE_QUEUE_LOOP
 
 		SET_NEW_FINAL_DEST:
